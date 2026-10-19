@@ -1,6 +1,6 @@
 use iced::Theme;
 
-use crate::ui::rest_client::RestClient;
+use crate::ui::app::AppState;
 
 mod db;
 mod domain;
@@ -15,7 +15,7 @@ fn main() -> iced::Result {
 
     tracing::info!("Starting App Lazy..");
 
-    iced::application("Lazy", RestClient::update, RestClient::view)
+    iced::application("Lazy", AppState::update, AppState::view)
         .theme(|_| Theme::Dark)
-        .run_with(RestClient::new)
+        .run_with(AppState::new)
 }
