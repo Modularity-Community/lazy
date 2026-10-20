@@ -1,13 +1,24 @@
+use crate::util;
 use iced::{
-    Element, Length, Task, color,
+    Alignment, Element, Length, Padding, Task, color,
     highlighter::{self, Highlighter},
     widget::{
-        Space, TextEditor, column, container, horizontal_space, mouse_area, row, text,
-        text_editor::{Action, Content, Edit, Motion},
+        Space, TextEditor, column, container, row,
+        space::horizontal,
+        text,
+        text_editor::{Action, Content},
     },
 };
 
-use crate::util;
+const SURFACE: iced::Color = color!(0x1D2030);
+const EDITOR_BG: iced::Color = color!(0x121520);
+const TEXT: iced::Color = color!(0xF2F3FC);
+const MUTED: iced::Color = color!(0xA5ADC6);
+const GREEN: iced::Color = color!(0x72E0A3);
+const CYAN: iced::Color = color!(0x78E6E8);
+const VIOLET: iced::Color = color!(0xC5B7FF);
+const RED: iced::Color = color!(0xFF8295);
+const BORDER: iced::Color = color!(0x30364B);
 
 pub struct ResponsePanelState {
     pub status_text: String,
@@ -25,79 +36,88 @@ pub enum ResponsePanelMessage {
 impl ResponsePanelState {
     pub fn new() -> Self {
         Self {
-            status_text: String::from("-"),
-            time_text: String::from("-"),
-            response_text: Content::new(),
+            status_text: String::from("Waiting"),
+            time_text: String::new(),
+            response_text: Content::with_text(
+                "// Response data will appear here after you send a request",
+            ),
         }
     }
 
     pub fn update(&mut self, msg: ResponsePanelMessage) -> Task<ResponsePanelMessage> {
         match msg {
-            ResponsePanelMessage::ResponseEditorRightClick => {
-                tracing::info!("Response on right click");
-                Task::none()
-            }
+            ResponsePanelMessage::ResponseEditorRightClick => Task::none(),
             ResponsePanelMessage::ResponseEditorAction(action) => {
                 if !action.is_edit() {
                     self.response_text.perform(action);
                 }
-
                 Task::none()
             }
             ResponsePanelMessage::ResponseReceived(result) => {
                 match result {
                     Ok((body, status, time)) => {
                         let body = util::make_json_pretty(&body);
-
                         self.response_text = Content::with_text(&body);
-
-                        self.response_text
-                            .perform(Action::Move(Motion::DocumentStart));
-
-                        self.response_text.perform(Action::Edit(Edit::Backspace));
-
                         self.status_text = status;
                         self.time_text = time;
                     }
                     Err(err) => {
-                        self.response_text = Content::with_text(&format!("Error: {}", err));
+                        self.response_text =
+                            Content::with_text(&format!("Request failed\n\n{err}"));
                         self.status_text = String::from("Error");
+                        self.time_text.clear();
                     }
-                };
-
+                }
                 Task::none()
             }
         }
     }
 
     pub fn view<'a>(&'a self) -> Element<'a, ResponsePanelMessage> {
+        let status_color = if self.status_text.starts_with('2') {
+            GREEN
+        } else if self.status_text == "Error" {
+            RED
+        } else if self.status_text == "Waiting" {
+            MUTED
+        } else {
+            VIOLET
+        };
+
         let header = row![
-            text("Response").size(16),
-            horizontal_space(),
-            text(format!("{}", &self.status_text)).size(12),
-            Space::with_width(10),
-            text(format!("{}", &self.time_text)).size(12),
+            column![
+                text("Response").size(16).color(TEXT),
+                text("Inspect status and returned data")
+                    .size(11)
+                    .color(MUTED),
+            ]
+            .spacing(3),
+            horizontal(),
+            container(text(&self.status_text).size(11).color(status_color))
+                .padding([5, 8])
+                .style(move |_| container::Style {
+                    background: Some(color!(0x292D40).into()),
+                    border: iced::Border {
+                        color: status_color,
+                        width: 1.0,
+                        radius: 7.0.into()
+                    },
+                    ..Default::default()
+                }),
+            Space::new().width(6),
+            text(&self.time_text).size(11).color(MUTED),
         ]
-        .align_y(iced::Alignment::Center);
+        .align_y(Alignment::Center);
 
-        //TODO: Count headers ambil dari response headers
-        //TODO:  Cookies ambil dari response
         let tabs = row![
-            text("Body").size(14),
-            text("Headers 12").size(14),
-            text("Cookies 2").size(14),
+            text("Body").size(12).color(VIOLET),
+            text("Headers").size(12).color(MUTED),
+            text("Cookies").size(12).color(MUTED),
+            horizontal(),
+            text("JSON").size(10).color(CYAN),
         ]
-        .spacing(20);
-
-        let sub_tabs = row![
-            text("Pretty").size(13),
-            text("Raw").size(13),
-            text("Preview").size(13),
-            horizontal_space(),
-            text("Search...").size(13),
-        ]
-        .spacing(15)
-        .padding([10, 0]);
+        .spacing(14)
+        .align_y(Alignment::Center);
 
         let editor = TextEditor::new(&self.response_text)
             .height(Length::Fill)
@@ -111,16 +131,44 @@ impl ResponsePanelState {
             );
 
         container(
-            mouse_area(
-                column![header, Space::with_height(10), tabs, sub_tabs, editor]
-                    .spacing(10)
-                    .padding(15),
-            )
-            .on_right_press(ResponsePanelMessage::ResponseEditorRightClick),
+            column![
+                header,
+                container(tabs).padding(Padding {
+                    top: 13.0,
+                    bottom: 0.0,
+                    left: 8.0,
+                    right: 0.0
+                }),
+                container(editor)
+                    .padding(12)
+                    .width(Length::Fill)
+                    .height(Length::Fill)
+                    .style(|_| container::Style {
+                        background: Some(EDITOR_BG.into()),
+                        border: iced::Border {
+                            color: BORDER,
+                            width: 1.0,
+                            radius: 10.0.into()
+                        },
+                        ..Default::default()
+                    }),
+            ]
+            .spacing(8)
+            .padding(16)
+            .width(Length::Fill)
+            .height(Length::Fill),
         )
         .width(Length::Fill)
         .height(Length::Fill)
-        .style(|_theme| container::background(color!(0x121212)))
+        .style(|_| container::Style {
+            background: Some(SURFACE.into()),
+            border: iced::Border {
+                color: BORDER,
+                width: 1.0,
+                radius: 13.0.into(),
+            },
+            ..Default::default()
+        })
         .into()
     }
 }

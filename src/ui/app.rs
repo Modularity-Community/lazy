@@ -1,13 +1,14 @@
-use iced::{Length, Task};
-
-use iced::widget::{column, container, row};
+use iced::widget::{column, container, responsive, row, scrollable};
+use iced::{Element, Length, Task, color};
 
 use crate::ui::component::header_bar::{HeaderBarMessage, HeaderBarState};
 use crate::ui::component::navbar::{NavbarMessage, NavbarState};
 use crate::ui::component::request::{RequestPanelMessage, RequestPanelState};
 use crate::ui::component::response::{ResponsePanelMessage, ResponsePanelState};
 use crate::ui::component::sidebar::{SidebarMessage, SidebarState};
-use iced::Element;
+
+const BG: iced::Color = color!(0x11131D);
+const WORKSPACE: iced::Color = color!(0x191C29);
 
 pub struct AppState {
     pub is_loading: bool,
@@ -29,12 +30,6 @@ pub enum AppMessage {
     RequestFinish(Result<String, String>),
 }
 
-// method: HttpMethod::Post,
-// request_body: text_editor::Content::with_text("{}"),
-// response_text: text_editor::Content::new(),
-// status_text: String::from("-"),
-// time_text: String::from("-"),
-// is_loading: false,
 impl AppState {
     pub fn new() -> (Self, Task<AppMessage>) {
         (
@@ -58,7 +53,6 @@ impl AppState {
                 if matches!(msg, HeaderBarMessage::SendReqeust) {
                     return Task::done(AppMessage::ExecuteRequest);
                 }
-
                 self.header_bar.update(msg).map(AppMessage::Header)
             }
             AppMessage::RequestPanel(msg) => {
@@ -74,33 +68,81 @@ impl AppState {
     }
 
     pub fn view<'a>(&'a self) -> Element<'a, AppMessage> {
-        let sidebar_view = self.sidebar.view().map(AppMessage::Sidebar);
-        let navbar_view = self.navbar.view().map(AppMessage::Navbar);
-        let header_view = self.header_bar.view().map(AppMessage::Header);
-        let request_view = self.request_panel.view().map(AppMessage::RequestPanel);
-        let response_view = self.response_panel.view().map(AppMessage::ResponsePanel);
+        responsive(move |size| {
+            let navbar = self.navbar.view().map(AppMessage::Navbar);
+            let header = self.header_bar.view().map(AppMessage::Header);
+            let request = self.request_panel.view().map(AppMessage::RequestPanel);
+            let response = self.response_panel.view().map(AppMessage::ResponsePanel);
 
-        let main_content = column![
-            header_view,
-            row![
-                container(request_view).width(Length::FillPortion(1)),
-                container(response_view).width(Length::FillPortion(1)),
-            ]
+            let panels: Element<'a, AppMessage> = if size.width < 1180.0 {
+                column![
+                    container(request)
+                        .width(Length::Fill)
+                        .height(Length::Fixed(390.0)),
+                    container(response)
+                        .width(Length::Fill)
+                        .height(Length::Fixed(390.0)),
+                ]
+                .spacing(14)
+                .width(Length::Fill)
+                .into()
+            } else {
+                row![
+                    container(request)
+                        .width(Length::FillPortion(1))
+                        .height(Length::Fill),
+                    container(response)
+                        .width(Length::FillPortion(1))
+                        .height(Length::Fill),
+                ]
+                .spacing(14)
+                .height(Length::Fill)
+                .width(Length::Fill)
+                .into()
+            };
+
+            let content: Element<'a, AppMessage> = if size.width < 760.0 {
+                column![
+                    header,
+                    scrollable(panels).height(Length::Fill).width(Length::Fill),
+                ]
+                .spacing(14)
+                .padding(12)
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .into()
+            } else {
+                let sidebar = self.sidebar.view().map(AppMessage::Sidebar);
+                row![
+                    container(sidebar)
+                        .width(Length::Fixed(232.0))
+                        .height(Length::Fill),
+                    column![header, panels]
+                        .spacing(14)
+                        .padding(16)
+                        .width(Length::Fill)
+                        .height(Length::Fill),
+                ]
+                .spacing(0)
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .into()
+            };
+
+            container(
+                column![
+                    navbar,
+                    container(content).width(Length::Fill).height(Length::Fill)
+                ]
+                .spacing(0)
+                .width(Length::Fill)
+                .height(Length::Fill),
+            )
+            .width(Length::Fill)
             .height(Length::Fill)
-            .spacing(10)
-        ]
-        .spacing(10);
-
-        let body = row![
-            container(sidebar_view).width(Length::Fixed(220.0)),
-            container(main_content).width(Length::Fill),
-        ]
-        .spacing(10);
-
-        column![
-            container(navbar_view).width(Length::Fill),
-            container(body).width(Length::Fill).height(Length::Fill)
-        ]
+            .style(|_| container::background(BG))
+            .into()
+        })
         .into()
     }
 }

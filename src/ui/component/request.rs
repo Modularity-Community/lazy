@@ -1,13 +1,22 @@
-use std::sync::Arc;
-
 use iced::{
-    Element, Length, Task,
+    Alignment, Element, Length, Task, color,
     highlighter::{Highlighter, Settings, Theme},
     widget::{
-        column, container, horizontal_space, mouse_area, row, text,
+        button, column, container, row,
+        space::horizontal,
+        text,
         text_editor::{self, Edit},
     },
 };
+use std::sync::Arc;
+
+const SURFACE: iced::Color = color!(0x1D2030);
+const EDITOR_BG: iced::Color = color!(0x121520);
+const TEXT: iced::Color = color!(0xF2F3FC);
+const MUTED: iced::Color = color!(0xA5ADC6);
+const VIOLET: iced::Color = color!(0xC5B7FF);
+const CYAN: iced::Color = color!(0x78E6E8);
+const BORDER: iced::Color = color!(0x30364B);
 
 pub struct RequestPanelState {
     pub body: text_editor::Content,
@@ -24,7 +33,9 @@ pub enum RequestPanelMessage {
 impl RequestPanelState {
     pub fn new() -> Self {
         Self {
-            body: text_editor::Content::new(),
+            body: text_editor::Content::with_text(
+                "{\n  \"name\": \"Lazy\",\n  \"enabled\": true\n}",
+            ),
             is_menu_open: false,
         }
     }
@@ -33,70 +44,127 @@ impl RequestPanelState {
         match message {
             RequestPanelMessage::BodyEdited(action) => {
                 self.body.perform(action);
-                Task::none()
             }
-            RequestPanelMessage::Prettify => {
-                //TODO: Action prettify json
-                Task::none()
-            }
-            RequestPanelMessage::ToggleMenu => {
-                tracing::info!("Toggle Menu Opened");
-                self.is_menu_open = !self.is_menu_open;
+            RequestPanelMessage::Prettify => self.prettify_body(),
+            RequestPanelMessage::ToggleMenu => self.is_menu_open = !self.is_menu_open,
+        }
+        Task::none()
+    }
 
-                let txt_body = self.body.text();
-
-                if !txt_body.trim().is_empty() {
-                    if let Ok(json_value) = serde_json::from_str::<serde_json::Value>(&txt_body) {
-                        if let Ok(pretty_json) = serde_json::to_string_pretty(&json_value) {
-                            if pretty_json != txt_body {
-                                self.body.perform(text_editor::Action::SelectAll);
-                                self.body.perform(text_editor::Action::Edit(Edit::Paste(
-                                    Arc::new(pretty_json),
-                                )));
-                            }
-                        }
-                    }
+    fn prettify_body(&mut self) {
+        let raw = self.body.text();
+        if let Ok(value) = serde_json::from_str::<serde_json::Value>(&raw) {
+            if let Ok(pretty) = serde_json::to_string_pretty(&value) {
+                if pretty != raw {
+                    self.body.perform(text_editor::Action::SelectAll);
+                    self.body
+                        .perform(text_editor::Action::Edit(Edit::Paste(Arc::new(pretty))));
                 }
-                Task::none()
             }
         }
     }
 
     pub fn view<'a>(&'a self) -> Element<'a, RequestPanelMessage> {
-        let tabs = row![
-            text("Params").size(14),
-            text("Auth").size(14),
-            text("Headers 4").size(14),
-            text("Body").size(14),
+        let title = row![
+            column![
+                text("Request").size(16).color(TEXT),
+                text("Configure the payload for your API call")
+                    .size(11)
+                    .color(MUTED),
+            ]
+            .spacing(3),
+            horizontal(),
+            text("BODY").size(10).color(VIOLET),
         ]
-        .spacing(20);
+        .align_y(Alignment::Center);
+
+        let tabs = row![
+            text("Params").size(12).color(MUTED),
+            text("Auth").size(12).color(MUTED),
+            text("Headers").size(12).color(MUTED),
+            container(text("Body").size(12).color(VIOLET))
+                .padding([7, 10])
+                .style(|_| container::Style {
+                    background: Some(color!(0x302A48).into()),
+                    border: iced::Border {
+                        radius: 7.0.into(),
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                }),
+        ]
+        .spacing(12)
+        .align_y(Alignment::Center);
+
+        let format_button = button(text("Format JSON").size(11).color(CYAN))
+            .on_press(RequestPanelMessage::Prettify)
+            .padding([6, 9])
+            .style(|_theme, _status| iced::widget::button::Style {
+                background: Some(color!(0x22283A).into()),
+                text_color: CYAN,
+                border: iced::Border {
+                    color: BORDER,
+                    width: 1.0,
+                    radius: 7.0.into(),
+                },
+                ..Default::default()
+            });
 
         let sub_tabs = row![
-            text("JSON").size(13),
-            text("Form").size(13),
-            text("Text").size(13),
-            text("GraphQL").size(13),
-            horizontal_space(),
+            text("JSON").size(11).color(CYAN),
+            text("UTF-8").size(10).color(MUTED),
+            horizontal(),
+            format_button,
         ]
-        .spacing(15)
-        .padding([10, 0]);
+        .spacing(10)
+        .align_y(Alignment::Center);
 
-        let editor = iced::widget::text_editor(&self.body)
+        let editor = text_editor::TextEditor::new(&self.body)
             .height(Length::Fill)
             .on_action(RequestPanelMessage::BodyEdited)
             .highlight_with::<Highlighter>(
                 Settings {
-                    theme: Theme::SolarizedDark,
+                    theme: Theme::Base16Ocean,
                     token: "json".to_string(),
                 },
                 |high, _theme| high.to_format(),
             );
 
-        let editor_area = mouse_area(editor).on_right_press(RequestPanelMessage::ToggleMenu);
-
-        container(column![tabs, sub_tabs, editor_area].spacing(10).padding(15))
+        container(
+            column![
+                title,
+                container(tabs).padding([8, 0]),
+                container(sub_tabs).padding([4, 0]),
+                container(editor)
+                    .padding(12)
+                    .width(Length::Fill)
+                    .height(Length::Fill)
+                    .style(|_| container::Style {
+                        background: Some(EDITOR_BG.into()),
+                        border: iced::Border {
+                            color: BORDER,
+                            width: 1.0,
+                            radius: 10.0.into()
+                        },
+                        ..Default::default()
+                    }),
+            ]
+            .spacing(8)
+            .padding(16)
             .width(Length::Fill)
-            .height(Length::Fill)
-            .into()
+            .height(Length::Fill),
+        )
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .style(|_| container::Style {
+            background: Some(SURFACE.into()),
+            border: iced::Border {
+                color: BORDER,
+                width: 1.0,
+                radius: 13.0.into(),
+            },
+            ..Default::default()
+        })
+        .into()
     }
 }

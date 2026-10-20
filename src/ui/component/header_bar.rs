@@ -1,9 +1,20 @@
 use crate::enums::method::HttpMethod;
-
 use iced::{
-    Alignment, Element, Length, Padding, Renderer, Task, Theme,
-    widget::{button, column, horizontal_space, pick_list, row, text, text_input},
+    Alignment, Element, Length, Padding, Task, color,
+    widget::{
+        button, column, container, pick_list, responsive, row,
+        space::{self, horizontal},
+        text, text_input,
+    },
 };
+
+const BG: iced::Color = color!(0x11131D);
+const SURFACE: iced::Color = color!(0x1B1E2D);
+const TEXT: iced::Color = color!(0xF2F3FC);
+const MUTED: iced::Color = color!(0xA5ADC6);
+const CYAN: iced::Color = color!(0x78E6E8);
+const VIOLET: iced::Color = color!(0xC5B7FF);
+const BORDER: iced::Color = color!(0x30364B);
 
 pub struct HeaderBarState {
     pub url: String,
@@ -16,7 +27,7 @@ pub enum HeaderBarMessage {
     UrlEdited(String),
     SendReqeust,
     FinishedRequest,
-    MethodSelected(crate::enums::method::HttpMethod),
+    MethodSelected(HttpMethod),
 }
 
 impl HeaderBarState {
@@ -27,109 +38,112 @@ impl HeaderBarState {
             is_sending: false,
         }
     }
+
     pub fn update(&mut self, message: HeaderBarMessage) -> Task<HeaderBarMessage> {
         match message {
-            HeaderBarMessage::UrlEdited(url) => {
-                self.url = url;
-                Task::none()
-            }
-            HeaderBarMessage::FinishedRequest => {
-                self.is_sending = false;
-
-                Task::none()
-            }
-            HeaderBarMessage::SendReqeust => {
-                self.is_sending = true;
-                Task::none()
-                // let url = self.url.clone();
-                // self.status_text = String::from("Loading...");
-                // self.time_text = String::from("-");
-                // let body_text = self.request_body.text();
-                //
-                // let client = Client::builder()
-                //     .danger_accept_invalid_hostnames(true)
-                //     .danger_accept_invalid_certs(true)
-                //     .build()
-                //     .unwrap();
-                //
-                // Task::perform(
-                //     async move {
-                //         let start_time = std::time::Instant::now();
-                //         let request = client.request(method, &url);
-                //
-                //         let request = if !body_text.is_empty() {
-                //             request
-                //                 .header("content-type", "application/json; charset=UTF-8")
-                //                 .body(body_text)
-                //         } else {
-                //             request
-                //         };
-                //
-                //         match request.send().await {
-                //             Ok(res) => {
-                //                 let status = res.status().to_string();
-                //                 let time = format!("{}ms", start_time.elapsed().as_millis());
-                //                 match res.text().await {
-                //                     Ok(text) => Ok((text, status, time)),
-                //                     Err(e) => Err(e.to_string()),
-                //                 }
-                //             }
-                //             Err(e) => Err(e.to_string()),
-                //         }
-                //     },
-                //     Message::ResponseReceived,
-                // )
-            }
-            HeaderBarMessage::MethodSelected(method) => {
-                self.method = method;
-                Task::none()
-            }
+            HeaderBarMessage::UrlEdited(url) => self.url = url,
+            HeaderBarMessage::FinishedRequest => self.is_sending = false,
+            HeaderBarMessage::SendReqeust => self.is_sending = true,
+            HeaderBarMessage::MethodSelected(method) => self.method = method,
         }
+        Task::none()
     }
 
     pub fn view<'a>(&'a self) -> Element<'a, HeaderBarMessage> {
-        //TODO: Workspace
-
-        let method_picker = pick_list(
-            &HttpMethod::ALL[..],
-            Some(&self.method),
-            HeaderBarMessage::MethodSelected,
-        )
-        .width(Length::Fixed(90.0));
-
-        let url_input = text_input("Enter URL...", &self.url)
-            .on_input(HeaderBarMessage::UrlEdited)
-            .padding(8);
-
-        let send_btn = button(if self.is_sending {
-            text("Sending...")
-        } else {
-            text("Send")
-        })
-        .on_press_maybe(if self.is_sending {
-            None
-        } else {
-            Some(HeaderBarMessage::SendReqeust)
-        })
-        .padding([8, 20]);
-
-        let top_bar: iced::widget::Row<'_, HeaderBarMessage, Theme, Renderer> = row![
-            text("Auth API > Login").size(12),
-            horizontal_space(),
-            text("2 mins ago").size(12)
+        let breadcrumb = row![
+            text("WORKSPACE").size(10).color(MUTED),
+            text("/ ").size(11).color(MUTED),
+            text("Auth API").size(12).color(VIOLET),
+            horizontal(),
+            text("REST CLIENT").size(10).color(MUTED),
         ]
-        .padding([10, 15]);
+        .align_y(Alignment::Center);
 
-        let request = row![method_picker, url_input, send_btn]
-            .spacing(10)
-            .padding(Padding {
-                top: 0.0,
-                right: 15.0,
-                bottom: 10.0,
-                left: 15.0,
-            })
-            .align_y(Alignment::Center);
+        let request_controls: Element<'a, HeaderBarMessage> = responsive(move |size| {
+            let method_picker = pick_list(
+                &HttpMethod::ALL[..],
+                Some(&self.method),
+                HeaderBarMessage::MethodSelected,
+            )
+            .width(Length::Fixed(104.0))
+            .padding([10, 9]);
 
-        column![top_bar, request].into()
+            let url_input = text_input("https://api.example.com/endpoint", &self.url)
+                .on_input(HeaderBarMessage::UrlEdited)
+                .padding([11, 12])
+                .size(14)
+                .width(Length::Fill)
+                .style(|_theme, _status| iced::widget::text_input::Style {
+                    background: SURFACE.into(),
+                    border: iced::Border {
+                        color: BORDER,
+                        width: 1.0,
+                        radius: 9.0.into(),
+                    },
+                    icon: MUTED,
+                    placeholder: MUTED,
+                    value: TEXT,
+                    selection: VIOLET,
+                });
+
+            let send_label = if self.is_sending {
+                "Sending…"
+            } else {
+                "➤  Send"
+            };
+            let send_btn = button(text(send_label).size(13).color(BG))
+                .on_press_maybe((!self.is_sending).then_some(HeaderBarMessage::SendReqeust))
+                .padding([11, 18])
+                .style(|_theme, status| {
+                    let background = match status {
+                        iced::widget::button::Status::Hovered => color!(0x9AF0F0),
+                        _ => CYAN,
+                    };
+                    iced::widget::button::Style {
+                        background: Some(background.into()),
+                        text_color: BG,
+                        border: iced::Border {
+                            radius: 9.0.into(),
+                            ..Default::default()
+                        },
+                        ..Default::default()
+                    }
+                });
+
+            if size.width < 520.0 {
+                column![
+                    row![method_picker].width(Length::Fill),
+                    url_input,
+                    row![horizontal(), send_btn],
+                ]
+                .spacing(9)
+                .width(Length::Fill)
+                .into()
+            } else {
+                row![method_picker, url_input, send_btn]
+                    .spacing(9)
+                    .align_y(Alignment::Center)
+                    .width(Length::Fill)
+                    .into()
+            }
+        })
+        .into();
+
+        container(
+            column![
+                container(breadcrumb).padding(Padding {
+                    top: 2.0,
+                    bottom: 2.0,
+                    left: 10.0,
+                    right: 2.0
+                }),
+                request_controls,
+            ]
+            .spacing(2)
+            .padding([14, 16]),
+        )
+        .width(Length::Fill)
+        .style(|_| container::background(SURFACE))
+        .into()
     }
 }

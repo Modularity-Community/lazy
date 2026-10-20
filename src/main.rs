@@ -15,7 +15,8 @@ fn main() -> iced::Result {
 
     tracing::info!("Starting App Lazy..");
 
-    iced::application("Lazy", AppState::update, AppState::view)
-        .theme(|_| Theme::Dark)
-        .run_with(AppState::new)
+    iced::application(AppState::new, AppState::update, AppState::view)
+        .theme(Theme::Dark)
+        .title("Lazy")
+        .run()
 }
