@@ -1,11 +1,11 @@
 use std::sync::Arc;
 
-use crate::util;
 use iced::{
     Element, Length, Task,
+    highlighter::{Highlighter, Settings, Theme},
     widget::{
         column, container, horizontal_space, mouse_area, row, text,
-        text_editor::{self, Action, Edit},
+        text_editor::{self, Edit},
     },
 };
 
@@ -33,23 +33,30 @@ impl RequestPanelState {
         match message {
             RequestPanelMessage::BodyEdited(action) => {
                 self.body.perform(action);
-
-                let txt_body = self.body.text();
-                let body = util::make_json_pretty(&txt_body);
-                self.body.perform(Action::Edit(Edit::Paste(Arc::new(body))));
-
-                self.body.perform(text_editor::Action::Move(
-                    text_editor::Motion::DocumentStart,
-                ));
-
-                self.body
-                    .perform(text_editor::Action::Edit(Edit::Backspace));
                 Task::none()
             }
-            RequestPanelMessage::Prettify => Task::none(),
+            RequestPanelMessage::Prettify => {
+                //TODO: Action prettify json
+                Task::none()
+            }
             RequestPanelMessage::ToggleMenu => {
                 tracing::info!("Toggle Menu Opened");
                 self.is_menu_open = !self.is_menu_open;
+
+                let txt_body = self.body.text();
+
+                if !txt_body.trim().is_empty() {
+                    if let Ok(json_value) = serde_json::from_str::<serde_json::Value>(&txt_body) {
+                        if let Ok(pretty_json) = serde_json::to_string_pretty(&json_value) {
+                            if pretty_json != txt_body {
+                                self.body.perform(text_editor::Action::SelectAll);
+                                self.body.perform(text_editor::Action::Edit(Edit::Paste(
+                                    Arc::new(pretty_json),
+                                )));
+                            }
+                        }
+                    }
+                }
                 Task::none()
             }
         }
@@ -76,7 +83,14 @@ impl RequestPanelState {
 
         let editor = iced::widget::text_editor(&self.body)
             .height(Length::Fill)
-            .on_action(RequestPanelMessage::BodyEdited);
+            .on_action(RequestPanelMessage::BodyEdited)
+            .highlight_with::<Highlighter>(
+                Settings {
+                    theme: Theme::SolarizedDark,
+                    token: "json".to_string(),
+                },
+                |high, _theme| high.to_format(),
+            );
 
         let editor_area = mouse_area(editor).on_right_press(RequestPanelMessage::ToggleMenu);
 
