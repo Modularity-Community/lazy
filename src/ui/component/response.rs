@@ -25,8 +25,8 @@ pub enum ResponsePanelMessage {
 impl ResponsePanelState {
     pub fn new() -> Self {
         Self {
-            status_text: String::new(),
-            time_text: String::new(),
+            status_text: String::from("-"),
+            time_text: String::from("-"),
             response_text: Content::new(),
         }
     }

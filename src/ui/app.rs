@@ -29,7 +29,6 @@ pub enum AppMessage {
     RequestFinish(Result<String, String>),
 }
 
-// url: String::from("https://jsonplaceholder.typicode.com/posts"),
 // method: HttpMethod::Post,
 // request_body: text_editor::Content::with_text("{}"),
 // response_text: text_editor::Content::new(),
@@ -82,7 +81,6 @@ impl AppState {
         let response_view = self.response_panel.view().map(AppMessage::ResponsePanel);
 
         let main_content = column![
-            navbar_view,
             header_view,
             row![
                 container(request_view).width(Length::FillPortion(1)),
@@ -99,9 +97,10 @@ impl AppState {
         ]
         .spacing(10);
 
-        container(body)
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .into()
+        column![
+            container(navbar_view).width(Length::Fill),
+            container(body).width(Length::Fill).height(Length::Fill)
+        ]
+        .into()
     }
 }

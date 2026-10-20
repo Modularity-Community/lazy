@@ -1,8 +1,8 @@
 use crate::enums::method::HttpMethod;
 
 use iced::{
-    Element, Length, Padding, Task,
-    widget::{button, pick_list, row, text, text_input},
+    Alignment, Element, Length, Padding, Renderer, Task, Theme,
+    widget::{button, column, horizontal_space, pick_list, row, text, text_input},
 };
 
 pub struct HeaderBarState {
@@ -22,7 +22,7 @@ pub enum HeaderBarMessage {
 impl HeaderBarState {
     pub fn new() -> Self {
         Self {
-            url: String::new(),
+            url: String::from("https://jsonplaceholder.typicode.com/posts"),
             method: HttpMethod::Get,
             is_sending: false,
         }
@@ -89,12 +89,6 @@ impl HeaderBarState {
 
     pub fn view<'a>(&'a self) -> Element<'a, HeaderBarMessage> {
         //TODO: Workspace
-        // let top_bar = row![
-        //     text("Auth API > Login").size(12),
-        //     horizontal_space(),
-        //     text("2 mins ago").size(12)
-        // ]
-        // .padding([10, 15]);
 
         let method_picker = pick_list(
             &HttpMethod::ALL[..],
@@ -119,7 +113,14 @@ impl HeaderBarState {
         })
         .padding([8, 20]);
 
-        row![method_picker, url_input, send_btn]
+        let top_bar: iced::widget::Row<'_, HeaderBarMessage, Theme, Renderer> = row![
+            text("Auth API > Login").size(12),
+            horizontal_space(),
+            text("2 mins ago").size(12)
+        ]
+        .padding([10, 15]);
+
+        let request = row![method_picker, url_input, send_btn]
             .spacing(10)
             .padding(Padding {
                 top: 0.0,
@@ -127,7 +128,8 @@ impl HeaderBarState {
                 bottom: 10.0,
                 left: 15.0,
             })
-            .align_y(iced::Alignment::Center)
-            .into()
+            .align_y(Alignment::Center);
+
+        column![top_bar, request].into()
     }
 }
