@@ -1,14 +1,13 @@
-use iced::Task;
+use iced::{Length, Task};
 
-use iced::widget::{Text, column, container, row};
+use iced::widget::{column, container, row};
 
-use super::component::{header_bar, navbar, sidebar};
 use crate::ui::component::header_bar::{HeaderBarMessage, HeaderBarState};
-use crate::ui::component::navbar::NavbarState;
+use crate::ui::component::navbar::{NavbarMessage, NavbarState};
 use crate::ui::component::request::{RequestPanelMessage, RequestPanelState};
 use crate::ui::component::response::{ResponsePanelMessage, ResponsePanelState};
 use crate::ui::component::sidebar::{SidebarMessage, SidebarState};
-use iced::{Element, Length};
+use iced::Element;
 
 pub struct AppState {
     pub is_loading: bool,
@@ -25,6 +24,7 @@ pub enum AppMessage {
     Header(HeaderBarMessage),
     RequestPanel(RequestPanelMessage),
     ResponsePanel(ResponsePanelMessage),
+    Navbar(NavbarMessage),
     ExecuteRequest,
     RequestFinish(Result<String, String>),
 }
@@ -53,7 +53,8 @@ impl AppState {
 
     pub fn update(&mut self, message: AppMessage) -> Task<AppMessage> {
         match message {
-            AppMessage::Sidebar(msg) => Task::none(),
+            AppMessage::Navbar(msg) => self.navbar.update(msg).map(AppMessage::Navbar),
+            AppMessage::Sidebar(msg) => self.sidebar.update(msg).map(AppMessage::Sidebar),
             AppMessage::Header(msg) => {
                 if matches!(msg, HeaderBarMessage::SendReqeust) {
                     return Task::done(AppMessage::ExecuteRequest);
@@ -61,23 +62,46 @@ impl AppState {
 
                 self.header_bar.update(msg).map(AppMessage::Header)
             }
-            AppMessage::RequestPanel(msg) => Task::none(),
-            AppMessage::ResponsePanel(msg) => Task::none(),
+            AppMessage::RequestPanel(msg) => {
+                self.request_panel.update(msg).map(AppMessage::RequestPanel)
+            }
+            AppMessage::ResponsePanel(msg) => self
+                .response_panel
+                .update(msg)
+                .map(AppMessage::ResponsePanel),
             AppMessage::ExecuteRequest => Task::none(),
-            AppMessage::RequestFinish(msg) => Task::none(),
+            AppMessage::RequestFinish(_) => Task::none(),
         }
     }
 
-    pub fn view(&self) -> Element<AppMessage> {
-        // let content = column![
-        //     navbar::view(),
-        //     row![sidebar::view(), header_bar::view(self)].height(Length::Fill)
-        // ];
+    pub fn view<'a>(&'a self) -> Element<'a, AppMessage> {
+        let sidebar_view = self.sidebar.view().map(AppMessage::Sidebar);
+        let navbar_view = self.navbar.view().map(AppMessage::Navbar);
+        let header_view = self.header_bar.view().map(AppMessage::Header);
+        let request_view = self.request_panel.view().map(AppMessage::RequestPanel);
+        let response_view = self.response_panel.view().map(AppMessage::ResponsePanel);
 
-        // container(content)
-        //     .width(Length::Fill)
-        //     .height(Length::Fill)
-        //     .into()
-        Text::new("test").into()
+        let main_content = column![
+            navbar_view,
+            header_view,
+            row![
+                container(request_view).width(Length::FillPortion(1)),
+                container(response_view).width(Length::FillPortion(1)),
+            ]
+            .height(Length::Fill)
+            .spacing(10)
+        ]
+        .spacing(10);
+
+        let body = row![
+            container(sidebar_view).width(Length::Fixed(220.0)),
+            container(main_content).width(Length::Fill),
+        ]
+        .spacing(10);
+
+        container(body)
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .into()
     }
 }

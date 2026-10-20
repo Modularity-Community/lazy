@@ -1,5 +1,5 @@
 use iced::{
-    Element, Length, color,
+    Element, Length, Task, color,
     widget::{Space, column, container, horizontal_space, row, text, text_input},
 };
 
@@ -13,8 +13,10 @@ impl SidebarState {
         Self {}
     }
 
-    pub fn update(&mut self, _: SidebarMessage) {}
-    pub fn view(&mut self) -> Element<SidebarMessage> {
+    pub fn update(&mut self, _: SidebarMessage) -> Task<SidebarMessage> {
+        Task::none()
+    }
+    pub fn view<'a>(&'a self) -> Element<'a, SidebarMessage> {
         let header = row![
             text("Collections").size(16),
             horizontal_space(),

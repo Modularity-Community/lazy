@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::util;
 use iced::{
-    Element, Length,
+    Element, Length, Task,
     widget::{
         column, container, horizontal_space, mouse_area, row, text,
         text_editor::{self, Action, Edit},
@@ -29,7 +29,7 @@ impl RequestPanelState {
         }
     }
 
-    pub fn update(&mut self, message: RequestPanelMessage) {
+    pub fn update(&mut self, message: RequestPanelMessage) -> Task<RequestPanelMessage> {
         match message {
             RequestPanelMessage::BodyEdited(action) => {
                 self.body.perform(action);
@@ -44,16 +44,18 @@ impl RequestPanelState {
 
                 self.body
                     .perform(text_editor::Action::Edit(Edit::Backspace));
+                Task::none()
             }
-            RequestPanelMessage::Prettify => {}
+            RequestPanelMessage::Prettify => Task::none(),
             RequestPanelMessage::ToggleMenu => {
                 tracing::info!("Toggle Menu Opened");
-                self.is_menu_open = !self.is_menu_open
+                self.is_menu_open = !self.is_menu_open;
+                Task::none()
             }
         }
     }
 
-    pub fn view(&self) -> Element<RequestPanelMessage> {
+    pub fn view<'a>(&'a self) -> Element<'a, RequestPanelMessage> {
         let tabs = row![
             text("Params").size(14),
             text("Auth").size(14),

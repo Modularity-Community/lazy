@@ -1,5 +1,5 @@
 use iced::{
-    Element, Length, color,
+    Element, Length, Task, color,
     highlighter::{self, Highlighter},
     widget::{
         Space, TextEditor, column, container, horizontal_space, mouse_area, row, text,
@@ -31,15 +31,18 @@ impl ResponsePanelState {
         }
     }
 
-    pub fn update(&mut self, msg: ResponsePanelMessage) {
+    pub fn update(&mut self, msg: ResponsePanelMessage) -> Task<ResponsePanelMessage> {
         match msg {
             ResponsePanelMessage::ResponseEditorRightClick => {
                 tracing::info!("Response on right click");
+                Task::none()
             }
             ResponsePanelMessage::ResponseEditorAction(action) => {
                 if !action.is_edit() {
                     self.response_text.perform(action);
                 }
+
+                Task::none()
             }
             ResponsePanelMessage::ResponseReceived(result) => {
                 match result {
@@ -61,11 +64,13 @@ impl ResponsePanelState {
                         self.status_text = String::from("Error");
                     }
                 };
+
+                Task::none()
             }
         }
     }
 
-    pub fn view(&mut self) -> Element<ResponsePanelMessage> {
+    pub fn view<'a>(&'a self) -> Element<'a, ResponsePanelMessage> {
         let header = row![
             text("Response").size(16),
             horizontal_space(),

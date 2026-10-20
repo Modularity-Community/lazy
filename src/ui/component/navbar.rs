@@ -1,6 +1,6 @@
 use iced::{
-    Element, color, widget::Space, widget::button, widget::container, widget::horizontal_space,
-    widget::row, widget::text,
+    Element, Task, color,
+    widget::{Space, button, container, horizontal_space, row, text},
 };
 
 pub struct NavbarState {}
@@ -13,9 +13,11 @@ impl NavbarState {
         Self {}
     }
 
-    pub fn update(&mut self, _: NavbarMessage) {}
+    pub fn update(&mut self, _: NavbarMessage) -> Task<NavbarMessage> {
+        Task::none()
+    }
 
-    pub fn view(&mut self) -> Element<NavbarMessage> {
+    pub fn view<'a>(&'a self) -> Element<'a, NavbarMessage> {
         let logo = text("Lazy").size(24);
         let tabs = row![
             button(text("Collections")).padding([5, 10]),

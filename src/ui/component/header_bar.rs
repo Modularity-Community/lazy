@@ -87,7 +87,7 @@ impl HeaderBarState {
         }
     }
 
-    pub fn view(&self) -> Element<HeaderBarMessage> {
+    pub fn view<'a>(&'a self) -> Element<'a, HeaderBarMessage> {
         //TODO: Workspace
         // let top_bar = row![
         //     text("Auth API > Login").size(12),
