@@ -71,7 +71,7 @@ impl HeaderBarState {
         .style(|_theme, _status| iced::widget::pick_list::Style {
             background: SURFACE.into(),
             border: iced::Border {
-                color: BORDER,
+                color: Self::get_method_color(&self.method),
                 width: 1.0,
                 radius: 9.0.into(),
             },
@@ -155,7 +155,15 @@ impl HeaderBarState {
             .padding([14, 16]),
         )
         .width(Length::Fill)
-        .style(|_| container::background(SURFACE))
+        .style(|_| container::Style {
+            background: Some(SURFACE.into()),
+            border: iced::Border {
+                color: BORDER,
+                width: 1.0,
+                radius: 13.0.into(),
+            },
+            ..Default::default()
+        })
         .into()
     }
 }
