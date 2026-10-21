@@ -28,4 +28,5 @@ pub mod colors {
     pub const PRIMARY: Color = Color::from_rgb(0.2, 0.4, 0.8);
     pub const TEXT_PRIMARY: Color = Color::WHITE;
     pub const TEXT_MUTED: Color = Color::from_rgb(0.7, 0.7, 0.7);
+    pub const HOVERED: Color = color!(0x9AF0F0);
 }
