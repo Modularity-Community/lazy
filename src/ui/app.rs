@@ -3,6 +3,8 @@ use std::time::Instant;
 use iced::widget::{column, container, responsive, row, scrollable};
 use iced::{Element, Length, Size, Subscription, Task, window};
 
+use crate::enums::method::HttpMethod;
+use crate::infra::client::http_client::HttpClient;
 use crate::ui::component::header_bar::{HeaderBarMessage, HeaderBarState};
 use crate::ui::component::navbar::{NavbarMessage, NavbarState};
 use crate::ui::component::request::{RequestPanelMessage, RequestPanelState};
@@ -18,6 +20,7 @@ pub struct AppState {
     pub response_panel: ResponsePanelState,
     pub navbar: NavbarState,
     pub screen_size: Option<Size<f32>>,
+    pub http_client: HttpClient,
 }
 
 #[derive(Debug, Clone)]
@@ -28,7 +31,7 @@ pub enum AppMessage {
     ResponsePanel(ResponsePanelMessage),
     Navbar(NavbarMessage),
     ExecuteRequest,
-    RequestFinish(Result<String, String>),
+    RequestFinish(Result<(String, String, String), String>),
     ScreenSize(Option<Size<f32>>),
 }
 
@@ -43,6 +46,7 @@ impl AppState {
                 response_panel: ResponsePanelState::new(),
                 navbar: NavbarState::new(),
                 screen_size: None,
+                http_client: HttpClient::new(),
             },
             Task::none(),
         )
@@ -73,8 +77,44 @@ impl AppState {
                 .response_panel
                 .update(msg)
                 .map(AppMessage::ResponsePanel),
-            AppMessage::ExecuteRequest => Task::none(),
-            AppMessage::RequestFinish(_) => Task::none(),
+            AppMessage::ExecuteRequest => {
+                self.header_bar.is_sending = true;
+                let url = self.header_bar.url.clone();
+                let method = self.header_bar.method;
+                let client = self.http_client.clone();
+                let request = self.request_panel.body.text();
+
+                Task::perform(
+                    async move {
+                        let start_time = Instant::now();
+                        let result = match method {
+                            HttpMethod::Get => client.get(&url).await,
+                            HttpMethod::Post => client.post(&url, &request).await,
+                            HttpMethod::Put => client.get(&url).await,
+                            HttpMethod::Delete => client.get(&url).await,
+                            HttpMethod::Patch => client.get(&url).await,
+                        };
+                        let elapsed = start_time.elapsed();
+                        let time_str = format!("{} ms", elapsed.as_millis());
+                        match result {
+                            Ok(response) => {
+                                let status_code = response.status().as_u16().to_string();
+                                let body = response.text().await.unwrap_or_else(|e| e.to_string());
+                                Ok((body, status_code, time_str))
+                            }
+                            Err(err) => Err(err.to_string()),
+                        }
+                    },
+                    |e| AppMessage::RequestFinish(e),
+                )
+            }
+            AppMessage::RequestFinish(result) => {
+                self.header_bar.is_sending = false;
+
+                self.response_panel
+                    .update(ResponsePanelMessage::ResponseReceived(result))
+                    .map(AppMessage::ResponsePanel)
+            }
         }
     }
 
