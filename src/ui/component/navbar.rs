@@ -60,7 +60,7 @@ impl NavbarState {
                 .align_y(Alignment::Center)
                 .padding([11, 18]),
         )
-        .height(80)
+        .height(80) //TODO: i think it should be responsive
         .width(Length::Fill)
         .style(|_| container::background(SURFACE))
         .into()

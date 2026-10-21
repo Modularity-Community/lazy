@@ -1,5 +1,5 @@
 use iced::widget::{column, container, responsive, row, scrollable};
-use iced::{Element, Length, Task, color};
+use iced::{Element, Length, Size, Task, color, window};
 
 use crate::ui::component::header_bar::{HeaderBarMessage, HeaderBarState};
 use crate::ui::component::navbar::{NavbarMessage, NavbarState};
@@ -17,6 +17,7 @@ pub struct AppState {
     pub request_panel: RequestPanelState,
     pub response_panel: ResponsePanelState,
     pub navbar: NavbarState,
+    pub screen_size: Option<Size<f32>>,
 }
 
 #[derive(Debug, Clone)]
@@ -28,6 +29,8 @@ pub enum AppMessage {
     Navbar(NavbarMessage),
     ExecuteRequest,
     RequestFinish(Result<String, String>),
+    GetScreenSize,
+    ScreenSize(Option<Size<f32>>),
 }
 
 impl AppState {
@@ -40,6 +43,7 @@ impl AppState {
                 request_panel: RequestPanelState::new(),
                 response_panel: ResponsePanelState::new(),
                 navbar: NavbarState::new(),
+                screen_size: None,
             },
             Task::none(),
         )
@@ -47,6 +51,12 @@ impl AppState {
 
     pub fn update(&mut self, message: AppMessage) -> Task<AppMessage> {
         match message {
+            AppMessage::GetScreenSize => window::latest()
+                .and_then(move |id| window::monitor_size(id).map(AppMessage::ScreenSize)),
+            AppMessage::ScreenSize(size) => {
+                self.screen_size = size;
+                Task::none()
+            }
             AppMessage::Navbar(msg) => self.navbar.update(msg).map(AppMessage::Navbar),
             AppMessage::Sidebar(msg) => self.sidebar.update(msg).map(AppMessage::Sidebar),
             AppMessage::Header(msg) => {
