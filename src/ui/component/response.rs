@@ -10,15 +10,7 @@ use iced::{
     },
 };
 
-const SURFACE: iced::Color = color!(0x1D2030);
-const EDITOR_BG: iced::Color = color!(0x121520);
-const TEXT: iced::Color = color!(0xF2F3FC);
-const MUTED: iced::Color = color!(0xA5ADC6);
-const GREEN: iced::Color = color!(0x72E0A3);
-const CYAN: iced::Color = color!(0x78E6E8);
-const VIOLET: iced::Color = color!(0xC5B7FF);
-const RED: iced::Color = color!(0xFF8295);
-const BORDER: iced::Color = color!(0x30364B);
+use crate::ui::theme::colors::{BORDER, CYAN, EDITOR_BG, GREEN, MUTED, RED, SURFACE, TEXT, VIOLET};
 
 pub struct ResponsePanelState {
     pub status_text: String,
