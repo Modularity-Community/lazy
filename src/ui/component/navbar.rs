@@ -1,7 +1,13 @@
 use iced::{
-    Element, Task, color,
-    widget::{Space, button, container, horizontal_space, row, text},
+    Alignment, Element, Length, Task, color,
+    widget::{button, container, responsive, row, space::horizontal, text},
 };
+
+const SURFACE: iced::Color = color!(0x151826);
+const TEXT: iced::Color = color!(0xF2F3FC);
+const MUTED: iced::Color = color!(0xA5ADC6);
+const CYAN: iced::Color = color!(0x78E6E8);
+const VIOLET: iced::Color = color!(0xC5B7FF);
 
 pub struct NavbarState {}
 
@@ -18,28 +24,45 @@ impl NavbarState {
     }
 
     pub fn view<'a>(&'a self) -> Element<'a, NavbarMessage> {
-        let logo = text("Lazy").size(24);
-        let tabs = row![
-            button(text("Collections")).padding([5, 10]),
-            button(text("History")).padding([5, 10]),
-            button(text("Environments")).padding([5, 10]),
+        let logo = row![
+            text("✦").size(24).color(CYAN),
+            text("Lazy").size(21).color(TEXT),
+            text("BETA").size(9).color(VIOLET),
         ]
-        .spacing(15);
+        .spacing(7)
+        .align_y(Alignment::Center);
 
-        let settings_icon = text("icon_setting");
+        let nav_items: Element<'a, NavbarMessage> = responsive(move |size| {
+            let collections = button(text("Collections").size(12).color(VIOLET)).padding([8, 10]);
+            let history = button(text("History").size(12).color(MUTED)).padding([8, 10]);
+            let environments = button(text("Environments").size(12).color(MUTED)).padding([8, 10]);
+            let settings = button(text("⚙ Settings").size(12).color(MUTED)).padding([8, 10]);
+
+            if size.width < 560.0 {
+                row![settings].align_y(Alignment::End).into()
+            } else if size.width < 780.0 {
+                row![collections, history, settings]
+                    .spacing(4)
+                    .align_y(Alignment::End)
+                    .into()
+            } else {
+                row![collections, history, environments, settings]
+                    .spacing(4)
+                    .align_y(Alignment::End)
+                    .into()
+            }
+        })
+        .into();
 
         container(
-            row![
-                logo,
-                Space::with_width(30),
-                tabs,
-                horizontal_space(),
-                settings_icon
-            ]
-            .align_y(iced::Alignment::Center)
-            .padding([10, 20]),
+            row![logo, horizontal(), nav_items]
+                .spacing(12)
+                .align_y(Alignment::Center)
+                .padding([11, 18]),
         )
-        .style(|_theme| container::background(color!(0x1A1B26)))
+        .height(80) //TODO: i think it should be responsive
+        .width(Length::Fill)
+        .style(|_| container::background(SURFACE))
         .into()
     }
 }
