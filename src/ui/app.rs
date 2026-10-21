@@ -1,5 +1,7 @@
+use std::time::Instant;
+
 use iced::widget::{column, container, responsive, row, scrollable};
-use iced::{Element, Length, Size, Task, color, window};
+use iced::{Element, Length, Size, Subscription, Task, color, window};
 
 use crate::ui::component::header_bar::{HeaderBarMessage, HeaderBarState};
 use crate::ui::component::navbar::{NavbarMessage, NavbarState};
@@ -29,7 +31,6 @@ pub enum AppMessage {
     Navbar(NavbarMessage),
     ExecuteRequest,
     RequestFinish(Result<String, String>),
-    GetScreenSize,
     ScreenSize(Option<Size<f32>>),
 }
 
@@ -49,12 +50,15 @@ impl AppState {
         )
     }
 
-    pub fn update(&mut self, message: AppMessage) -> Task<AppMessage> {
+    pub fn subscription(&self) -> Subscription<AppMessage> {
+        window::resize_events().map(|(_id, size)| AppMessage::ScreenSize(Some(size)))
+    }
+
+    pub fn update(&mut self, message: AppMessage, _now: Instant) -> Task<AppMessage> {
         match message {
-            AppMessage::GetScreenSize => window::latest()
-                .and_then(move |id| window::monitor_size(id).map(AppMessage::ScreenSize)),
             AppMessage::ScreenSize(size) => {
                 self.screen_size = size;
+                tracing::info!("Screen size : {:?}", self.screen_size);
                 Task::none()
             }
             AppMessage::Navbar(msg) => self.navbar.update(msg).map(AppMessage::Navbar),
@@ -127,11 +131,14 @@ impl AppState {
                     container(sidebar)
                         .width(Length::Fixed(232.0))
                         .height(Length::Fill),
-                    column![header, panels]
-                        .spacing(14)
-                        .padding(16)
-                        .width(Length::Fill)
-                        .height(Length::Fill),
+                    scrollable(
+                        column![header, panels]
+                            .spacing(14)
+                            .padding(16)
+                            .width(Length::Fill)
+                    )
+                    .height(Length::Fill)
+                    .width(Length::Fill),
                 ]
                 .spacing(0)
                 .width(Length::Fill)
