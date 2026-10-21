@@ -6,7 +6,7 @@ use iced::{
         Space, TextEditor, column, container, row,
         space::horizontal,
         text,
-        text_editor::{self, Action, Content},
+        text_editor::{self, Action, Content, Edit, Motion},
     },
 };
 
@@ -52,6 +52,11 @@ impl ResponsePanelState {
                         self.response_text = Content::with_text(&body);
                         self.status_text = status;
                         self.time_text = time;
+
+                        self.response_text
+                            .perform(Action::Move(Motion::DocumentStart));
+
+                        self.response_text.perform(Action::Edit(Edit::Backspace));
                     }
                     Err(err) => {
                         self.response_text =
