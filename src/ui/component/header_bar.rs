@@ -1,6 +1,8 @@
 use crate::{
     enums::method::HttpMethod,
-    ui::theme::colors::{BG, BORDER, CYAN, HOVERED, MUTED, SURFACE, TEXT, VIOLET},
+    ui::theme::colors::{
+        BG, BORDER, CYAN, GREEN, HOVERED, MUTED, ORANGE, RED, SURFACE, TEXT, VIOLET,
+    },
 };
 use iced::{
     Alignment, Element, Length, Padding, Size, Task, color,
@@ -22,6 +24,16 @@ pub enum HeaderBarMessage {
 }
 
 impl HeaderBarState {
+    fn get_method_color(method: &HttpMethod) -> iced::Color {
+        match method {
+            HttpMethod::Get => CYAN,
+            HttpMethod::Post => GREEN,
+            HttpMethod::Put | HttpMethod::Patch => ORANGE,
+            HttpMethod::Delete => RED,
+            _ => VIOLET,
+        }
+    }
+
     pub fn new() -> Self {
         Self {
             url: String::from("https://jsonplaceholder.typicode.com/posts"),
@@ -56,6 +68,17 @@ impl HeaderBarState {
             Some(&self.method),
             HeaderBarMessage::MethodSelected,
         )
+        .style(|_theme, _status| iced::widget::pick_list::Style {
+            background: SURFACE.into(),
+            border: iced::Border {
+                color: BORDER,
+                width: 1.0,
+                radius: 9.0.into(),
+            },
+            text_color: Self::get_method_color(&self.method),
+            placeholder_color: MUTED,
+            handle_color: Self::get_method_color(&self.method),
+        })
         .width(Length::Fixed(104.0))
         .padding([10, 9]);
 
