@@ -88,7 +88,7 @@ impl AppState {
             let request = self.request_panel.view().map(AppMessage::RequestPanel);
             let response = self.response_panel.view().map(AppMessage::ResponsePanel);
 
-            let panels: Element<'a, AppMessage> = if size.width < 1180.0 {
+            let panels: Element<'a, AppMessage> = if size.width < 950.0 {
                 column![
                     container(request)
                         .width(Length::Fill)
@@ -104,13 +104,13 @@ impl AppState {
                 row![
                     container(request)
                         .width(Length::FillPortion(1))
-                        .height(Length::Fill),
+                        .height(Length::Fixed(500.0)),
                     container(response)
                         .width(Length::FillPortion(1))
-                        .height(Length::Fill),
+                        .height(Length::Fixed(500.0)),
                 ]
                 .spacing(14)
-                .height(Length::Fill)
+                .height(Length::Shrink)
                 .width(Length::Fill)
                 .into()
             };

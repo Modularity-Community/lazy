@@ -114,6 +114,17 @@ impl RequestPanelState {
         let editor = text_editor::TextEditor::new(&self.body)
             .height(Length::Fill)
             .on_action(RequestPanelMessage::BodyEdited)
+            .style(|_theme, _status| text_editor::Style {
+                background: EDITOR_BG.into(),
+                border: iced::Border {
+                    color: BORDER,
+                    width: 1.0,
+                    radius: 10.0.into(),
+                },
+                placeholder: MUTED,
+                value: TEXT,
+                selection: MUTED,
+            })
             .highlight_with::<Highlighter>(
                 Settings {
                     theme: Theme::Base16Ocean,
@@ -127,19 +138,7 @@ impl RequestPanelState {
                 title,
                 container(tabs).padding([8, 0]),
                 container(sub_tabs).padding([4, 0]),
-                container(editor)
-                    .padding(12)
-                    .width(Length::Fill)
-                    .height(Length::Fill)
-                    .style(|_| container::Style {
-                        background: Some(EDITOR_BG.into()),
-                        border: iced::Border {
-                            color: BORDER,
-                            width: 1.0,
-                            radius: 10.0.into()
-                        },
-                        ..Default::default()
-                    }),
+                editor
             ]
             .spacing(8)
             .padding(16)
