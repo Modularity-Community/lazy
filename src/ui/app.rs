@@ -56,7 +56,6 @@ impl AppState {
         match message {
             AppMessage::ScreenSize(size) => {
                 self.screen_size = size;
-                tracing::info!("Screen size : {:?}", self.screen_size);
                 Task::none()
             }
             AppMessage::Navbar(msg) => self.navbar.update(msg).map(AppMessage::Navbar),
@@ -81,7 +80,7 @@ impl AppState {
 
     pub fn view<'a>(&'a self) -> Element<'a, AppMessage> {
         responsive(move |size| {
-            let navbar = self.navbar.view().map(AppMessage::Navbar);
+            let navbar = self.navbar.view(&self.screen_size).map(AppMessage::Navbar);
             let header = self.header_bar.view().map(AppMessage::Header);
             let request = self.request_panel.view().map(AppMessage::RequestPanel);
             let response = self.response_panel.view().map(AppMessage::ResponsePanel);
