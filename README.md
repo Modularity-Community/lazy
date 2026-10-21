@@ -19,3 +19,7 @@ This application was created to solve that specific problem. By completely ditch
 
 * [Rust]
 * [Iced]
+
+## Preview
+<img width="1920" height="1200" alt="image" src="https://github.com/user-attachments/assets/e63de261-f0f8-4dd6-8d2d-1e4827f5a26d" />
+
