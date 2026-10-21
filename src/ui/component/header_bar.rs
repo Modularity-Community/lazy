@@ -57,7 +57,7 @@ impl HeaderBarState {
         let breadcrumb = row![
             text("WORKSPACE").size(10).color(MUTED),
             text("/ ").size(11).color(MUTED),
-            text("Auth API").size(12).color(VIOLET),
+            text("TEST API").size(12).color(VIOLET), //TODO: Based on request name
             horizontal(),
             text("REST CLIENT").size(10).color(MUTED),
         ]

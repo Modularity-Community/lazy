@@ -6,7 +6,7 @@ use iced::{
         Space, TextEditor, column, container, row,
         space::horizontal,
         text,
-        text_editor::{Action, Content},
+        text_editor::{self, Action, Content},
     },
 };
 
@@ -114,6 +114,17 @@ impl ResponsePanelState {
         let editor = TextEditor::new(&self.response_text)
             .height(Length::Fill)
             .on_action(ResponsePanelMessage::ResponseEditorAction)
+            .style(|_theme, _status| text_editor::Style {
+                background: EDITOR_BG.into(),
+                border: iced::Border {
+                    color: BORDER,
+                    width: 1.0,
+                    radius: 10.0.into(),
+                },
+                placeholder: MUTED,
+                value: TEXT,
+                selection: MUTED,
+            })
             .highlight_with::<Highlighter>(
                 highlighter::Settings {
                     theme: highlighter::Theme::Base16Ocean,
@@ -131,19 +142,7 @@ impl ResponsePanelState {
                     left: 8.0,
                     right: 0.0
                 }),
-                container(editor)
-                    .padding(12)
-                    .width(Length::Fill)
-                    .height(Length::Fill)
-                    .style(|_| container::Style {
-                        background: Some(EDITOR_BG.into()),
-                        border: iced::Border {
-                            color: BORDER,
-                            width: 1.0,
-                            radius: 10.0.into()
-                        },
-                        ..Default::default()
-                    }),
+                editor
             ]
             .spacing(8)
             .padding(16)
