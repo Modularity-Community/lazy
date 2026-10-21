@@ -1,14 +1,9 @@
 use iced::{
-    Alignment, Element, Length, Task, color,
+    Alignment, Element, Length, Task,
     widget::{button, container, responsive, row, space::horizontal, text},
 };
 
-const SURFACE: iced::Color = color!(0x151826);
-const TEXT: iced::Color = color!(0xF2F3FC);
-const MUTED: iced::Color = color!(0xA5ADC6);
-const CYAN: iced::Color = color!(0x78E6E8);
-const VIOLET: iced::Color = color!(0xC5B7FF);
-
+use crate::ui::theme::colors::{MUTED, SURFACE, TEXT, VIOLET};
 pub struct NavbarState {}
 
 #[derive(Debug, Clone)]
@@ -25,7 +20,6 @@ impl NavbarState {
 
     pub fn view<'a>(&'a self) -> Element<'a, NavbarMessage> {
         let logo = row![
-            text("✦").size(24).color(CYAN),
             text("Lazy").size(21).color(TEXT),
             text("BETA").size(9).color(VIOLET),
         ]

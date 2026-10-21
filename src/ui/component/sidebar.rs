@@ -3,14 +3,7 @@ use iced::{
     widget::{Space, button, column, container, row, space::horizontal, text, text_input},
 };
 
-const BG: iced::Color = color!(0x151826);
-const TEXT: iced::Color = color!(0xF2F3FC);
-const MUTED: iced::Color = color!(0xA5ADC6);
-const BORDER: iced::Color = color!(0x30364B);
-const GREEN: iced::Color = color!(0x72E0A3);
-const ORANGE: iced::Color = color!(0xFFB86B);
-const CYAN: iced::Color = color!(0x78E6E8);
-const VIOLET: iced::Color = color!(0xC5B7FF);
+use crate::ui::theme::colors::{BG, BORDER, CYAN, GREEN, MUTED, ORANGE, TEXT, VIOLET};
 
 pub struct SidebarState {}
 #[derive(Debug, Clone)]

@@ -1,20 +1,13 @@
-use crate::enums::method::HttpMethod;
+use crate::{
+    enums::method::HttpMethod,
+    ui::theme::colors::{BG, BORDER, CYAN, MUTED, SURFACE, TEXT, VIOLET},
+};
 use iced::{
     Alignment, Element, Length, Padding, Task, color,
     widget::{
-        button, column, container, pick_list, responsive, row,
-        space::{self, horizontal},
-        text, text_input,
+        button, column, container, pick_list, responsive, row, space::horizontal, text, text_input,
     },
 };
-
-const BG: iced::Color = color!(0x11131D);
-const SURFACE: iced::Color = color!(0x1B1E2D);
-const TEXT: iced::Color = color!(0xF2F3FC);
-const MUTED: iced::Color = color!(0xA5ADC6);
-const CYAN: iced::Color = color!(0x78E6E8);
-const VIOLET: iced::Color = color!(0xC5B7FF);
-const BORDER: iced::Color = color!(0x30364B);
 
 pub struct HeaderBarState {
     pub url: String,
@@ -89,7 +82,7 @@ impl HeaderBarState {
             let send_label = if self.is_sending {
                 "Sending…"
             } else {
-                "➤  Send"
+                "Send"
             };
             let send_btn = button(text(send_label).size(13).color(BG))
                 .on_press_maybe((!self.is_sending).then_some(HeaderBarMessage::SendReqeust))

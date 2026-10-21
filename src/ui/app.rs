@@ -1,16 +1,14 @@
 use std::time::Instant;
 
 use iced::widget::{column, container, responsive, row, scrollable};
-use iced::{Element, Length, Size, Subscription, Task, color, window};
+use iced::{Element, Length, Size, Subscription, Task, window};
 
 use crate::ui::component::header_bar::{HeaderBarMessage, HeaderBarState};
 use crate::ui::component::navbar::{NavbarMessage, NavbarState};
 use crate::ui::component::request::{RequestPanelMessage, RequestPanelState};
 use crate::ui::component::response::{ResponsePanelMessage, ResponsePanelState};
 use crate::ui::component::sidebar::{SidebarMessage, SidebarState};
-
-const BG: iced::Color = color!(0x11131D);
-const WORKSPACE: iced::Color = color!(0x191C29);
+use crate::ui::theme::colors;
 
 pub struct AppState {
     pub is_loading: bool,
@@ -157,7 +155,7 @@ impl AppState {
             )
             .width(Length::Fill)
             .height(Length::Fill)
-            .style(|_| container::background(BG))
+            .style(|_| container::background(colors::BG))
             .into()
         })
         .into()
