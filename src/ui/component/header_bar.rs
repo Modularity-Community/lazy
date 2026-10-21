@@ -1,12 +1,10 @@
 use crate::{
     enums::method::HttpMethod,
-    ui::theme::colors::{BG, BORDER, CYAN, MUTED, SURFACE, TEXT, VIOLET},
+    ui::theme::colors::{BG, BORDER, CYAN, HOVERED, MUTED, SURFACE, TEXT, VIOLET},
 };
 use iced::{
-    Alignment, Element, Length, Padding, Task, color,
-    widget::{
-        button, column, container, pick_list, responsive, row, space::horizontal, text, text_input,
-    },
+    Alignment, Element, Length, Padding, Size, Task, color,
+    widget::{button, column, container, pick_list, row, space::horizontal, text, text_input},
 };
 
 pub struct HeaderBarState {
@@ -42,7 +40,8 @@ impl HeaderBarState {
         Task::none()
     }
 
-    pub fn view<'a>(&'a self) -> Element<'a, HeaderBarMessage> {
+    pub fn view<'a>(&'a self, screen_size: &Option<Size<f32>>) -> Element<'a, HeaderBarMessage> {
+        let window_width = screen_size.map(|s| s.width).unwrap_or(800.0);
         let breadcrumb = row![
             text("WORKSPACE").size(10).color(MUTED),
             text("/ ").size(11).color(MUTED),
@@ -52,75 +51,72 @@ impl HeaderBarState {
         ]
         .align_y(Alignment::Center);
 
-        let request_controls: Element<'a, HeaderBarMessage> = responsive(move |size| {
-            let method_picker = pick_list(
-                &HttpMethod::ALL[..],
-                Some(&self.method),
-                HeaderBarMessage::MethodSelected,
-            )
-            .width(Length::Fixed(104.0))
-            .padding([10, 9]);
+        let method_picker = pick_list(
+            &HttpMethod::ALL[..],
+            Some(&self.method),
+            HeaderBarMessage::MethodSelected,
+        )
+        .width(Length::Fixed(104.0))
+        .padding([10, 9]);
 
-            let url_input = text_input("https://api.example.com/endpoint", &self.url)
-                .on_input(HeaderBarMessage::UrlEdited)
-                .padding([11, 12])
-                .size(14)
-                .width(Length::Fill)
-                .style(|_theme, _status| iced::widget::text_input::Style {
-                    background: SURFACE.into(),
+        let url_input = text_input("https://api.example.com/endpoint", &self.url)
+            .on_input(HeaderBarMessage::UrlEdited)
+            .padding([11, 12])
+            .size(14)
+            .width(Length::Fill)
+            .style(|_theme, _status| iced::widget::text_input::Style {
+                background: SURFACE.into(),
+                border: iced::Border {
+                    color: BORDER,
+                    width: 1.0,
+                    radius: 9.0.into(),
+                },
+                icon: MUTED,
+                placeholder: MUTED,
+                value: TEXT,
+                selection: VIOLET,
+            });
+
+        let send_label = if self.is_sending {
+            "Sending…"
+        } else {
+            "Send"
+        };
+        let send_btn = button(text(send_label).size(13).color(BG))
+            .on_press_maybe((!self.is_sending).then_some(HeaderBarMessage::SendReqeust))
+            .padding([11, 18])
+            .style(|_theme, status| {
+                let background = match status {
+                    iced::widget::button::Status::Hovered => HOVERED,
+                    _ => CYAN,
+                };
+                iced::widget::button::Style {
+                    background: Some(background.into()),
+                    text_color: BG,
                     border: iced::Border {
-                        color: BORDER,
-                        width: 1.0,
                         radius: 9.0.into(),
-                    },
-                    icon: MUTED,
-                    placeholder: MUTED,
-                    value: TEXT,
-                    selection: VIOLET,
-                });
-
-            let send_label = if self.is_sending {
-                "Sending…"
-            } else {
-                "Send"
-            };
-            let send_btn = button(text(send_label).size(13).color(BG))
-                .on_press_maybe((!self.is_sending).then_some(HeaderBarMessage::SendReqeust))
-                .padding([11, 18])
-                .style(|_theme, status| {
-                    let background = match status {
-                        iced::widget::button::Status::Hovered => color!(0x9AF0F0),
-                        _ => CYAN,
-                    };
-                    iced::widget::button::Style {
-                        background: Some(background.into()),
-                        text_color: BG,
-                        border: iced::Border {
-                            radius: 9.0.into(),
-                            ..Default::default()
-                        },
                         ..Default::default()
-                    }
-                });
+                    },
+                    ..Default::default()
+                }
+            });
 
-            if size.width < 520.0 {
-                column![
-                    row![method_picker].width(Length::Fill),
-                    url_input,
-                    row![horizontal(), send_btn],
-                ]
+        let request_controls: Element<'a, HeaderBarMessage> = if window_width < 520.0 {
+            column![
+                row![method_picker].width(Length::Fill),
+                url_input,
+                row![horizontal(), send_btn],
+            ]
+            .spacing(9)
+            .width(Length::Fill)
+            .into()
+        } else {
+            row![method_picker, url_input, send_btn]
                 .spacing(9)
+                .align_y(Alignment::Center)
                 .width(Length::Fill)
                 .into()
-            } else {
-                row![method_picker, url_input, send_btn]
-                    .spacing(9)
-                    .align_y(Alignment::Center)
-                    .width(Length::Fill)
-                    .into()
-            }
-        })
-        .into();
+        };
 
         container(
             column![

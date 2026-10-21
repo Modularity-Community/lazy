@@ -81,7 +81,10 @@ impl AppState {
     pub fn view<'a>(&'a self) -> Element<'a, AppMessage> {
         responsive(move |size| {
             let navbar = self.navbar.view(&self.screen_size).map(AppMessage::Navbar);
-            let header = self.header_bar.view().map(AppMessage::Header);
+            let header = self
+                .header_bar
+                .view(&self.screen_size)
+                .map(AppMessage::Header);
             let request = self.request_panel.view().map(AppMessage::RequestPanel);
             let response = self.response_panel.view().map(AppMessage::ResponsePanel);
 
