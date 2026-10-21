@@ -12,7 +12,7 @@ pub mod colors {
         0x1C as f32 / 255.0,
         0x29 as f32 / 255.0,
     ); // #191C29
-
+    pub const BTN_BG: iced::Color = color!(0x302A48);
     pub const SURFACE: iced::Color = color!(0x1B1E2D);
     pub const TEXT: iced::Color = color!(0xF2F3FC);
     pub const MUTED: iced::Color = color!(0xA5ADC6);

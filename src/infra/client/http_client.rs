@@ -35,7 +35,38 @@ impl HttpClient {
         Ok(response)
     }
 
-    pub async fn put() {}
-    pub async fn delete() {}
-    pub async fn query() {}
+    pub async fn patch(&self, url: &str, json_payload: &str) -> Result<Response, reqwest::Error> {
+        let response = self
+            .client
+            .patch(url)
+            .header("Content-Type", "application/json")
+            .body(json_payload.to_string())
+            .send()
+            .await?;
+
+        Ok(response)
+    }
+
+    pub async fn put(&self, url: &str, json_payload: &str) -> Result<Response, reqwest::Error> {
+        let response = self
+            .client
+            .put(url)
+            .header("Content-Type", "application/json")
+            .body(json_payload.to_string())
+            .send()
+            .await?;
+
+        Ok(response)
+    }
+    pub async fn delete(&self, url: &str, json_payload: &str) -> Result<Response, reqwest::Error> {
+        let response = self
+            .client
+            .delete(url)
+            .header("Content-Type", "application/json")
+            .body(json_payload.to_string())
+            .send()
+            .await?;
+
+        Ok(response)
+    }
 }

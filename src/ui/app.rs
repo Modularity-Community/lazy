@@ -90,9 +90,9 @@ impl AppState {
                         let result = match method {
                             HttpMethod::Get => client.get(&url).await,
                             HttpMethod::Post => client.post(&url, &request).await,
-                            HttpMethod::Put => client.get(&url).await,
-                            HttpMethod::Delete => client.get(&url).await,
-                            HttpMethod::Patch => client.get(&url).await,
+                            HttpMethod::Put => client.put(&url, &request).await,
+                            HttpMethod::Delete => client.delete(&url, &request).await,
+                            HttpMethod::Patch => client.patch(&url, &request).await,
                         };
                         let elapsed = start_time.elapsed();
                         let time_str = format!("{} ms", elapsed.as_millis());
@@ -137,21 +137,21 @@ impl AppState {
                         .width(Length::Fill)
                         .height(Length::Fixed(390.0)),
                 ]
-                .spacing(14)
+                .spacing(7)
                 .width(Length::Fill)
                 .into()
             } else {
                 row![
                     container(request)
                         .width(Length::FillPortion(1))
-                        .height(Length::Fixed(500.0)),
+                        .height(Length::Fill),
                     container(response)
                         .width(Length::FillPortion(1))
-                        .height(Length::Fixed(500.0)),
+                        .height(Length::Fill),
                 ]
-                .spacing(14)
-                .height(Length::Shrink)
+                .spacing(7)
                 .width(Length::Fill)
+                .height(Length::Fill)
                 .into()
             };
 
@@ -171,14 +171,15 @@ impl AppState {
                     container(sidebar)
                         .width(Length::Fixed(232.0))
                         .height(Length::Fill),
-                    scrollable(
+                    container(
                         column![header, panels]
                             .spacing(14)
-                            .padding(16)
                             .width(Length::Fill)
+                            .height(Length::Fill)
                     )
-                    .height(Length::Fill)
-                    .width(Length::Fill),
+                    .padding(16)
+                    .width(Length::Fill)
+                    .height(Length::Fill),
                 ]
                 .spacing(0)
                 .width(Length::Fill)

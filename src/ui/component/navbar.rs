@@ -1,9 +1,12 @@
 use iced::{
-    Alignment, Element, Length, Size, Task,
+    Alignment, Background, Element, Length, Size, Task,
     widget::{button, container, responsive, row, space::horizontal, text},
 };
 
-use crate::ui::theme::colors::{MUTED, SURFACE, TEXT, VIOLET};
+use crate::ui::{
+    style::button::LazyButton,
+    theme::colors::{BORDER, BTN_BG, MUTED, SURFACE, TEXT, VIOLET},
+};
 pub struct NavbarState {}
 
 #[derive(Debug, Clone)]
@@ -29,10 +32,18 @@ impl NavbarState {
         let window_width = screen_size.map(|s| s.width).unwrap_or(800.0);
 
         let nav_items: Element<'a, NavbarMessage> = {
-            let collections = button(text("Collections").size(12).color(VIOLET)).padding([8, 10]);
-            let history = button(text("History").size(12).color(MUTED)).padding([8, 10]);
-            let environments = button(text("Environments").size(12).color(MUTED)).padding([8, 10]);
-            let settings = button(text("Settings").size(12).color(MUTED)).padding([8, 10]);
+            let collections = button(text("Collections").size(12))
+                .btn_style()
+                .padding([8, 10]);
+            let history = button(text("History").size(12))
+                .btn_style()
+                .padding([8, 10]);
+            let environments = button(text("Environments").size(12))
+                .btn_style()
+                .padding([8, 10]);
+            let settings = button(text("Settings").size(12))
+                .btn_style()
+                .padding([8, 10]);
 
             if window_width < 560.0 {
                 row![settings].align_y(Alignment::End).into()
@@ -55,9 +66,17 @@ impl NavbarState {
                 .align_y(Alignment::Center)
                 .padding([11, 18]),
         )
-        .height(80)
+        .height(Length::Shrink)
         .width(Length::Fill)
-        .style(|_| container::background(SURFACE))
+        .style(|_| container::Style {
+            background: Some(SURFACE.into()),
+            border: iced::Border {
+                color: BORDER,
+                width: 1.0,
+                radius: 0.0.into(),
+            },
+            ..Default::default()
+        })
         .into()
     }
 }
