@@ -1,11 +1,12 @@
 use crate::{
     enums::method::HttpMethod,
-    ui::theme::colors::{
-        BG, BORDER, CYAN, GREEN, HOVERED, MUTED, ORANGE, RED, SURFACE, TEXT, VIOLET,
+    ui::{
+        style::{button::LazyButton, text_input::LazyTextInput},
+        theme::colors::{BG, BORDER, CYAN, GREEN, MUTED, ORANGE, RED, SURFACE, VIOLET},
     },
 };
 use iced::{
-    Alignment, Element, Length, Padding, Size, Task, color,
+    Alignment, Element, Length, Padding, Size, Task,
     widget::{button, column, container, pick_list, row, space::horizontal, text, text_input},
 };
 
@@ -16,7 +17,7 @@ pub struct HeaderBarState {
 }
 
 #[derive(Debug, Clone)]
-pub enum HeaderBarMessage {
+pub enum HeaderBarEvent {
     UrlEdited(String),
     SendReqeust,
     FinishedRequest,
@@ -42,17 +43,17 @@ impl HeaderBarState {
         }
     }
 
-    pub fn update(&mut self, message: HeaderBarMessage) -> Task<HeaderBarMessage> {
+    pub fn update(&mut self, message: HeaderBarEvent) -> Task<HeaderBarEvent> {
         match message {
-            HeaderBarMessage::UrlEdited(url) => self.url = url,
-            HeaderBarMessage::FinishedRequest => self.is_sending = false,
-            HeaderBarMessage::SendReqeust => self.is_sending = true,
-            HeaderBarMessage::MethodSelected(method) => self.method = method,
+            HeaderBarEvent::UrlEdited(url) => self.url = url,
+            HeaderBarEvent::FinishedRequest => self.is_sending = false,
+            HeaderBarEvent::SendReqeust => self.is_sending = true,
+            HeaderBarEvent::MethodSelected(method) => self.method = method,
         }
         Task::none()
     }
 
-    pub fn view<'a>(&'a self, screen_size: &Option<Size<f32>>) -> Element<'a, HeaderBarMessage> {
+    pub fn view<'a>(&'a self, screen_size: &Option<Size<f32>>) -> Element<'a, HeaderBarEvent> {
         let window_width = screen_size.map(|s| s.width).unwrap_or(800.0);
         let breadcrumb = row![
             text("WORKSPACE").size(10).color(MUTED),
@@ -66,7 +67,7 @@ impl HeaderBarState {
         let method_picker = pick_list(
             &HttpMethod::ALL[..],
             Some(&self.method),
-            HeaderBarMessage::MethodSelected,
+            HeaderBarEvent::MethodSelected,
         )
         .style(|_theme, _status| iced::widget::pick_list::Style {
             background: SURFACE.into(),
@@ -83,22 +84,11 @@ impl HeaderBarState {
         .padding([10, 9]);
 
         let url_input = text_input("https://api.example.com/endpoint", &self.url)
-            .on_input(HeaderBarMessage::UrlEdited)
+            .on_input(HeaderBarEvent::UrlEdited)
             .padding([11, 12])
             .size(14)
             .width(Length::Fill)
-            .style(|_theme, _status| iced::widget::text_input::Style {
-                background: SURFACE.into(),
-                border: iced::Border {
-                    color: BORDER,
-                    width: 1.0,
-                    radius: 9.0.into(),
-                },
-                icon: MUTED,
-                placeholder: MUTED,
-                value: TEXT,
-                selection: VIOLET,
-            });
+            .search_style();
 
         let send_label = if self.is_sending {
             "Sending…"
@@ -106,25 +96,11 @@ impl HeaderBarState {
             "Send"
         };
         let send_btn = button(text(send_label).size(13).color(BG))
-            .on_press_maybe((!self.is_sending).then_some(HeaderBarMessage::SendReqeust))
+            .on_press_maybe((!self.is_sending).then_some(HeaderBarEvent::SendReqeust))
             .padding([11, 18])
-            .style(|_theme, status| {
-                let background = match status {
-                    iced::widget::button::Status::Hovered => HOVERED,
-                    _ => CYAN,
-                };
-                iced::widget::button::Style {
-                    background: Some(background.into()),
-                    text_color: BG,
-                    border: iced::Border {
-                        radius: 9.0.into(),
-                        ..Default::default()
-                    },
-                    ..Default::default()
-                }
-            });
+            .btn_execute_style();
 
-        let request_controls: Element<'a, HeaderBarMessage> = if window_width < 520.0 {
+        let request_controls: Element<'a, HeaderBarEvent> = if window_width < 520.0 {
             column![
                 row![method_picker].width(Length::Fill),
                 url_input,

@@ -1,18 +1,18 @@
 use iced::{
-    Alignment, Background, Element, Length, Size, Task,
-    widget::{button, container, responsive, row, space::horizontal, text},
+    Alignment, Element, Length, Size, Task,
+    widget::{button, container, row, space::horizontal, text},
 };
 
 use crate::ui::{
     style::button::LazyButton,
-    theme::colors::{BORDER, BTN_BG, MUTED, SURFACE, TEXT, VIOLET},
+    theme::colors::{BORDER, SURFACE, TEXT, VIOLET},
 };
-pub struct NavbarState {}
+pub struct NavbarEvent {}
 
 #[derive(Debug, Clone)]
 pub enum NavbarMessage {}
 
-impl NavbarState {
+impl NavbarEvent {
     pub fn new() -> Self {
         Self {}
     }

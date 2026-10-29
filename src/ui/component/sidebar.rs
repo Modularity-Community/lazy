@@ -4,23 +4,27 @@ use iced::{
 };
 
 use crate::ui::{
+    icon::icon,
     style::button::LazyButton,
-    theme::colors::{BG, BORDER, BTN_BG, CYAN, GREEN, MUTED, ORANGE, TEXT, VIOLET},
+    theme::colors::{BG, BORDER, BTN_BG, CYAN, GREEN, MUTED, TEXT, VIOLET},
 };
 
 pub struct SidebarState {}
+
 #[derive(Debug, Clone)]
-pub enum SidebarMessage {}
+pub enum SidebarEvent {
+    SearchCollection(String),
+}
 
 impl SidebarState {
     pub fn new() -> Self {
         Self {}
     }
-    pub fn update(&mut self, _: SidebarMessage) -> Task<SidebarMessage> {
+    pub fn update(&mut self, _: SidebarEvent) -> Task<SidebarEvent> {
         Task::none()
     }
 
-    pub fn view<'a>(&'a self) -> Element<'a, SidebarMessage> {
+    pub fn view<'a>(&'a self) -> Element<'a, SidebarEvent> {
         let header = row![
             column![
                 text("Collections").size(15).color(TEXT),
@@ -28,7 +32,7 @@ impl SidebarState {
             ]
             .spacing(3),
             horizontal(),
-            button(text("+").size(17).color(CYAN))
+            button(icon("fa-plus").size(17))
                 .style(|_theme, _style| button::Style {
                     background: Background::Color(BTN_BG).into(),
                     border: iced::Border {
@@ -44,6 +48,7 @@ impl SidebarState {
         .align_y(Alignment::Center);
 
         let search_bar = text_input("Search collections...", "")
+            .on_input(SidebarEvent::SearchCollection)
             .padding([9, 10])
             .size(12)
             .style(|_theme, _status| iced::widget::text_input::Style {
@@ -60,6 +65,7 @@ impl SidebarState {
             });
 
         let collection = row![
+            icon("fa-folder_open").size(13),
             text("Auth API").size(13).color(TEXT),
             horizontal(),
             text("3").size(10).color(MUTED),
@@ -92,17 +98,12 @@ impl SidebarState {
         ]
         .spacing(13);
 
-        let other_collection = text("User Management").size(13).color(TEXT);
-
-        let footer = column![
-            button(text("Trash").size(12).color(MUTED))
-                .btn_style()
-                .padding([7, 8]),
-            button(text("Collection settings").size(12).color(MUTED))
-                .btn_style()
-                .padding([7, 8]),
+        let other_collection = row![
+            icon("fa-folder").size(13),
+            text("User Management").size(13).color(TEXT)
         ]
-        .spacing(4);
+        .spacing(8)
+        .align_y(Alignment::Center);
 
         container(
             column![
@@ -112,8 +113,6 @@ impl SidebarState {
                 collection,
                 requests,
                 other_collection,
-                horizontal(),
-                footer
             ]
             .spacing(14)
             .padding(16)

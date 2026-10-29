@@ -19,7 +19,7 @@ pub struct ResponsePanelState {
 }
 
 #[derive(Debug, Clone)]
-pub enum ResponsePanelMessage {
+pub enum ResponsePanelEvent {
     ResponseEditorAction(Action),
     ResponseEditorRightClick,
     ResponseReceived(Result<(String, String, String), String>),
@@ -36,16 +36,16 @@ impl ResponsePanelState {
         }
     }
 
-    pub fn update(&mut self, msg: ResponsePanelMessage) -> Task<ResponsePanelMessage> {
+    pub fn update(&mut self, msg: ResponsePanelEvent) -> Task<ResponsePanelEvent> {
         match msg {
-            ResponsePanelMessage::ResponseEditorRightClick => Task::none(),
-            ResponsePanelMessage::ResponseEditorAction(action) => {
+            ResponsePanelEvent::ResponseEditorRightClick => Task::none(),
+            ResponsePanelEvent::ResponseEditorAction(action) => {
                 if !action.is_edit() {
                     self.response_text.perform(action);
                 }
                 Task::none()
             }
-            ResponsePanelMessage::ResponseReceived(result) => {
+            ResponsePanelEvent::ResponseReceived(result) => {
                 match result {
                     Ok((body, status, time)) => {
                         let body = util::make_json_pretty(&body);
@@ -70,7 +70,7 @@ impl ResponsePanelState {
         }
     }
 
-    pub fn view<'a>(&'a self) -> Element<'a, ResponsePanelMessage> {
+    pub fn view<'a>(&'a self) -> Element<'a, ResponsePanelEvent> {
         let status_color = if self.status_text.starts_with('2') {
             GREEN
         } else if self.status_text == "Error" {
@@ -118,7 +118,7 @@ impl ResponsePanelState {
 
         let editor = TextEditor::new(&self.response_text)
             .height(Length::Fill)
-            .on_action(ResponsePanelMessage::ResponseEditorAction)
+            .on_action(ResponsePanelEvent::ResponseEditorAction)
             .style(|_theme, _status| text_editor::Style {
                 background: EDITOR_BG.into(),
                 border: iced::Border {
