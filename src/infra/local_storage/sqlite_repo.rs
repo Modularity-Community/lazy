@@ -1,10 +1,10 @@
 use async_trait::async_trait;
 use sqlx::SqlitePool;
 
-use crate::domain::{request_model::RequestSavedModel, request_repository::RequestSavedRepository};
+use crate::domain::db::DBRepository;
 
 pub struct SqliteRepository {
-    pool: SqlitePool,
+    pub pool: SqlitePool,
 }
 
 impl SqliteRepository {
@@ -14,20 +14,35 @@ impl SqliteRepository {
 }
 
 #[async_trait]
-impl RequestSavedRepository for SqliteRepository {
-    async fn save(&self, req: &RequestSavedModel) -> Result<i64, String> {
-        Result::Ok(0)
-    }
-    async fn fetch(&self) -> Result<Vec<RequestSavedModel>, String> {
-        Result::Ok(Vec::new())
-    }
-    async fn delete(&self) -> Result<i64, String> {
-        Result::Ok(0)
-    }
-    async fn update(&self) -> Result<i64, String> {
-        Result::Ok(0)
-    }
-    async fn fetch_one(&self) -> Result<RequestSavedModel, String> {
-        Result::Err(String::new())
+impl DBRepository for SqliteRepository {
+    async fn init_db(&self) -> Result<(), String> {
+        sqlx::query(
+            r#"
+            CREATE TABLE IF NOT EXISTS folders (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                parent_id INTEGER REFERENCES folders(id) ON DELETE CASCADE,
+                name TEXT NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE TABLE IF NOT EXISTS requests (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                folder_id INTEGER REFERENCES folders(id) ON DELETE CASCADE,
+                name TEXT NOT NULL,
+                method TEXT NOT NULL,
+                url TEXT NOT NULL,
+                headers TEXT NOT NULL,
+                params TEXT NOT NULL,
+                auth TEXT NOT NULL,
+                body TEXT NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            );
+            "#,
+        )
+        .execute(&self.pool)
+        .await
+        .map_err(|e| e.to_string())?;
+
+        Ok(())
     }
 }
