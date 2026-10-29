@@ -5,30 +5,29 @@ use iced::{Element, Length, Size, Subscription, Task, window};
 
 use crate::enums::method::HttpMethod;
 use crate::infra::client::http_client::HttpClient;
-use crate::ui::component::header_bar::{HeaderBarMessage, HeaderBarState};
-use crate::ui::component::navbar::{NavbarMessage, NavbarState};
-use crate::ui::component::request::{RequestPanelMessage, RequestPanelState};
-use crate::ui::component::response::{ResponsePanelMessage, ResponsePanelState};
-use crate::ui::component::sidebar::{SidebarMessage, SidebarState};
+use crate::ui::component::header_bar::{HeaderBarEvent, HeaderBarState};
+use crate::ui::component::navbar::{NavbarEvent, NavbarMessage};
+use crate::ui::component::request::{RequestPanelEvent, RequestPanelState};
+use crate::ui::component::response::{ResponsePanelEvent, ResponsePanelState};
+use crate::ui::component::sidebar::{SidebarEvent, SidebarState};
 use crate::ui::theme::colors;
 
 pub struct AppState {
-    pub is_loading: bool,
     pub sidebar: SidebarState,
     pub header_bar: HeaderBarState,
     pub request_panel: RequestPanelState,
     pub response_panel: ResponsePanelState,
-    pub navbar: NavbarState,
+    pub navbar: NavbarEvent,
     pub screen_size: Option<Size<f32>>,
     pub http_client: HttpClient,
 }
 
 #[derive(Debug, Clone)]
 pub enum AppMessage {
-    Sidebar(SidebarMessage),
-    Header(HeaderBarMessage),
-    RequestPanel(RequestPanelMessage),
-    ResponsePanel(ResponsePanelMessage),
+    Sidebar(SidebarEvent),
+    Header(HeaderBarEvent),
+    RequestPanel(RequestPanelEvent),
+    ResponsePanel(ResponsePanelEvent),
     Navbar(NavbarMessage),
     ExecuteRequest,
     RequestFinish(Result<(String, String, String), String>),
@@ -39,12 +38,11 @@ impl AppState {
     pub fn new() -> (Self, Task<AppMessage>) {
         (
             Self {
-                is_loading: false,
                 sidebar: SidebarState::new(),
                 header_bar: HeaderBarState::new(),
                 request_panel: RequestPanelState::new(),
                 response_panel: ResponsePanelState::new(),
-                navbar: NavbarState::new(),
+                navbar: NavbarEvent::new(),
                 screen_size: None,
                 http_client: HttpClient::new(),
             },
@@ -65,7 +63,7 @@ impl AppState {
             AppMessage::Navbar(msg) => self.navbar.update(msg).map(AppMessage::Navbar),
             AppMessage::Sidebar(msg) => self.sidebar.update(msg).map(AppMessage::Sidebar),
             AppMessage::Header(msg) => {
-                if matches!(msg, HeaderBarMessage::SendReqeust) {
+                if matches!(msg, HeaderBarEvent::SendReqeust) {
                     return Task::done(AppMessage::ExecuteRequest);
                 }
                 self.header_bar.update(msg).map(AppMessage::Header)
@@ -112,7 +110,7 @@ impl AppState {
                 self.header_bar.is_sending = false;
 
                 self.response_panel
-                    .update(ResponsePanelMessage::ResponseReceived(result))
+                    .update(ResponsePanelEvent::ResponseReceived(result))
                     .map(AppMessage::ResponsePanel)
             }
         }

@@ -16,7 +16,7 @@ pub struct RequestPanelState {
 }
 
 #[derive(Debug, Clone)]
-pub enum RequestPanelMessage {
+pub enum RequestPanelEvent {
     BodyEdited(text_editor::Action),
     Prettify,
     ToggleMenu,
@@ -32,13 +32,13 @@ impl RequestPanelState {
         }
     }
 
-    pub fn update(&mut self, message: RequestPanelMessage) -> Task<RequestPanelMessage> {
+    pub fn update(&mut self, message: RequestPanelEvent) -> Task<RequestPanelEvent> {
         match message {
-            RequestPanelMessage::BodyEdited(action) => {
+            RequestPanelEvent::BodyEdited(action) => {
                 self.body.perform(action);
             }
-            RequestPanelMessage::Prettify => self.prettify_body(),
-            RequestPanelMessage::ToggleMenu => self.is_menu_open = !self.is_menu_open,
+            RequestPanelEvent::Prettify => self.prettify_body(),
+            RequestPanelEvent::ToggleMenu => self.is_menu_open = !self.is_menu_open,
         }
         Task::none()
     }
@@ -56,7 +56,7 @@ impl RequestPanelState {
         }
     }
 
-    pub fn view<'a>(&'a self) -> Element<'a, RequestPanelMessage> {
+    pub fn view<'a>(&'a self) -> Element<'a, RequestPanelEvent> {
         let title = row![
             column![
                 text("Request").size(16).color(TEXT),
@@ -89,7 +89,7 @@ impl RequestPanelState {
         .align_y(Alignment::Center);
 
         let format_button = button(text("Format JSON").size(11).color(CYAN))
-            .on_press(RequestPanelMessage::Prettify)
+            .on_press(RequestPanelEvent::Prettify)
             .padding([6, 9])
             .style(|_theme, _status| iced::widget::button::Style {
                 background: Some(color!(0x22283A).into()),
@@ -113,7 +113,7 @@ impl RequestPanelState {
 
         let editor = text_editor::TextEditor::new(&self.body)
             .height(Length::Fill)
-            .on_action(RequestPanelMessage::BodyEdited)
+            .on_action(RequestPanelEvent::BodyEdited)
             .style(|_theme, _status| text_editor::Style {
                 background: EDITOR_BG.into(),
                 border: iced::Border {
