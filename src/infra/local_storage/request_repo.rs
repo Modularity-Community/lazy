@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use sqlx::Row;
 
 use crate::{
-    domain::request_model::{AuthConfig, RequestSavedModel},
+    domain::request_model::RequestSavedModel, enums::auth_config::AuthConfig,
     infra::local_storage::sqlite_repo::SqliteRepository,
 };
 
