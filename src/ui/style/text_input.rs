@@ -16,7 +16,7 @@ impl<'a, Message: Clone> LazyTextInput<'a, Message> for TextInput<'a, Message, T
             border: iced::Border {
                 color: BORDER,
                 width: 1.0,
-                radius: 9.0.into(),
+                radius: 1.0.into(),
             },
             icon: MUTED,
             placeholder: MUTED,

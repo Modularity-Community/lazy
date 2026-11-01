@@ -7,11 +7,12 @@ pub mod colors {
         0x1D as f32 / 255.0,
     ); // #11131D
 
-    pub const WORKSPACE: Color = Color::from_rgb(
-        0x19 as f32 / 255.0,
-        0x1C as f32 / 255.0,
-        0x29 as f32 / 255.0,
-    ); // #191C29
+    // pub const WORKSPACE: Color = Color::from_rgb(
+    //     0x19 as f32 / 255.0,
+    //     0x1C as f32 / 255.0,
+    //     0x29 as f32 / 255.0,
+    // ); // #191C29
+
     pub const BTN_BG: iced::Color = color!(0x302A48);
     pub const SURFACE: iced::Color = color!(0x1B1E2D);
     pub const TEXT: iced::Color = color!(0xF2F3FC);
@@ -25,8 +26,8 @@ pub mod colors {
     pub const ORANGE: iced::Color = color!(0xFFB86B);
     pub const GREEN: iced::Color = color!(0x72E0A3);
     pub const RED: iced::Color = color!(0xFF8295);
-    pub const PRIMARY: Color = Color::from_rgb(0.2, 0.4, 0.8);
-    pub const TEXT_PRIMARY: Color = Color::WHITE;
-    pub const TEXT_MUTED: Color = Color::from_rgb(0.7, 0.7, 0.7);
+    // pub const PRIMARY: Color = Color::from_rgb(0.2, 0.4, 0.8);
+    // pub const TEXT_PRIMARY: Color = Color::WHITE;
+    // pub const TEXT_MUTED: Color = Color::from_rgb(0.7, 0.7, 0.7);
     pub const HOVERED: Color = color!(0x9AF0F0);
 }

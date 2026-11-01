@@ -31,7 +31,7 @@ impl HeaderBarState {
             HttpMethod::Post => GREEN,
             HttpMethod::Put | HttpMethod::Patch => ORANGE,
             HttpMethod::Delete => RED,
-            _ => VIOLET,
+            // _ => VIOLET,
         }
     }
 
@@ -74,7 +74,7 @@ impl HeaderBarState {
             border: iced::Border {
                 color: Self::get_method_color(&self.method),
                 width: 1.0,
-                radius: 9.0.into(),
+                radius: 1.0.into(),
             },
             text_color: Self::get_method_color(&self.method),
             placeholder_color: MUTED,
@@ -102,8 +102,7 @@ impl HeaderBarState {
 
         let request_controls: Element<'a, HeaderBarEvent> = if window_width < 520.0 {
             column![
-                row![method_picker].width(Length::Fill),
-                url_input,
+                row![method_picker, url_input].width(Length::Fill),
                 row![horizontal(), send_btn],
             ]
             .spacing(9)
@@ -136,7 +135,7 @@ impl HeaderBarState {
             border: iced::Border {
                 color: BORDER,
                 width: 1.0,
-                radius: 13.0.into(),
+                radius: 1.0.into(),
             },
             ..Default::default()
         })
