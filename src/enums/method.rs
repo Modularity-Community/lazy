@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HttpMethod {
     Get,
@@ -15,6 +17,21 @@ impl HttpMethod {
         HttpMethod::Delete,
         HttpMethod::Patch,
     ];
+}
+
+impl FromStr for HttpMethod {
+    type Err = String;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value {
+            "GET" => Ok(HttpMethod::Get),
+            "POST" => Ok(HttpMethod::Post),
+            "PUT" => Ok(HttpMethod::Put),
+            "DELETE" => Ok(HttpMethod::Delete),
+            "PATCH" => Ok(HttpMethod::Patch),
+            _ => Err(format!("Invalid HTTP method: {}", value)),
+        }
+    }
 }
 
 impl std::fmt::Display for HttpMethod {

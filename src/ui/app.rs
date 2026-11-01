@@ -1,10 +1,19 @@
-use std::time::Instant;
+use std::str::FromStr;
+use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use iced::widget::{column, container, responsive, row, scrollable};
 use iced::{Element, Length, Size, Subscription, Task, window};
+use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions, SqliteSynchronous};
 
+use crate::domain::folder_model::FolderModel;
+use crate::domain::request_model::RequestSavedModel;
+use crate::enums::auth_config::AuthConfig;
 use crate::enums::method::HttpMethod;
 use crate::infra::client::http_client::HttpClient;
+use crate::infra::local_storage::folder_repo::FolderRepository;
+use crate::infra::local_storage::request_repo::RequestSavedRepository;
+use crate::infra::local_storage::sqlite_repo::{DBRepository, SqliteRepository};
 use crate::ui::component::header_bar::{HeaderBarEvent, HeaderBarState};
 use crate::ui::component::navbar::{NavbarEvent, NavbarMessage};
 use crate::ui::component::request::{RequestPanelEvent, RequestPanelState};
@@ -20,6 +29,9 @@ pub struct AppState {
     pub navbar: NavbarEvent,
     pub screen_size: Option<Size<f32>>,
     pub http_client: HttpClient,
+    pub repo: Option<Arc<SqliteRepository>>,
+    pub active_request_id: Option<i64>,
+    pub current_folder_id: Option<i64>,
 }
 
 #[derive(Debug, Clone)]
@@ -32,22 +44,50 @@ pub enum AppMessage {
     ExecuteRequest,
     RequestFinish(Result<(String, String, String), String>),
     ScreenSize(Option<Size<f32>>),
+
+    DatabaseReady(Result<Arc<SqliteRepository>, String>),
+    WorkspaceLoaded(Result<Vec<FolderModel>, String>),
+    SaveCurrentRequest,
+    RequestSaved(Result<i64, String>),
 }
 
 impl AppState {
     pub fn new() -> (Self, Task<AppMessage>) {
-        (
-            Self {
-                sidebar: SidebarState::new(),
-                header_bar: HeaderBarState::new(),
-                request_panel: RequestPanelState::new(),
-                response_panel: ResponsePanelState::new(),
-                navbar: NavbarEvent::new(),
-                screen_size: None,
-                http_client: HttpClient::new(),
+        let state = Self {
+            sidebar: SidebarState::new(),
+            header_bar: HeaderBarState::new(),
+            request_panel: RequestPanelState::new(),
+            response_panel: ResponsePanelState::new(),
+            navbar: NavbarEvent::new(),
+            screen_size: None,
+            http_client: HttpClient::new(),
+            repo: None,
+            current_folder_id: None,
+            active_request_id: None,
+        };
+
+        let options = SqliteConnectOptions::from_str("sqlite://lazy_rest.db?mode=rwc")
+            .unwrap()
+            .journal_mode(SqliteJournalMode::Wal)
+            .synchronous(SqliteSynchronous::Normal)
+            .busy_timeout(Duration::from_secs(5));
+
+        let init_task = Task::perform(
+            async {
+                let pool = SqlitePoolOptions::new()
+                    .max_connections(5)
+                    .connect_with(options)
+                    .await
+                    .map_err(|e| e.to_string())?;
+
+                let repo = SqliteRepository::new(pool);
+                repo.init_db().await?;
+                Ok(Arc::new(repo))
             },
-            Task::none(),
-        )
+            AppMessage::DatabaseReady,
+        );
+
+        (state, init_task)
     }
 
     pub fn subscription(&self) -> Subscription<AppMessage> {
@@ -56,6 +96,93 @@ impl AppState {
 
     pub fn update(&mut self, message: AppMessage, _now: Instant) -> Task<AppMessage> {
         match message {
+            AppMessage::DatabaseReady(Ok(repo)) => {
+                self.repo = Some(repo.clone());
+                Task::perform(
+                    async move { repo.fetch_workspace_tree().await },
+                    AppMessage::WorkspaceLoaded,
+                )
+            }
+            AppMessage::DatabaseReady(Err(err)) => {
+                tracing::error!("failed to initialize db: {err}");
+                Task::none()
+            }
+            AppMessage::WorkspaceLoaded(Ok(tree)) => {
+                self.sidebar.folders = tree;
+                Task::none()
+            }
+            AppMessage::WorkspaceLoaded(Err(err)) => {
+                tracing::error!("failed to load workspace : {err}");
+                Task::none()
+            }
+            AppMessage::SaveCurrentRequest => {
+                if let Some(repo) = self.repo.clone() {
+                    let req_model = RequestSavedModel {
+                        id: self.active_request_id,
+                        folder_id: self.current_folder_id,
+                        name: "New Request".to_string(),
+                        method: self.header_bar.method.to_string(),
+                        url: self.header_bar.url.clone(),
+                        headers: vec![],
+                        params: vec![],
+                        auth: AuthConfig::None,
+                        body: self.request_panel.request_editor.editor.content(),
+                    };
+
+                    Task::perform(
+                        async move {
+                            if req_model.id.is_some() {
+                                repo.update_request(&req_model).await?;
+                                Ok(req_model.id.unwrap())
+                            } else {
+                                repo.save_request(&req_model).await
+                            }
+                        },
+                        AppMessage::RequestSaved,
+                    )
+                } else {
+                    Task::none()
+                }
+            }
+            AppMessage::RequestSaved(Ok(inserted_id)) => {
+                self.active_request_id = Some(inserted_id);
+                if let Some(repo) = self.repo.clone() {
+                    Task::perform(
+                        async move { repo.fetch_workspace_tree().await },
+                        AppMessage::WorkspaceLoaded,
+                    )
+                } else {
+                    Task::none()
+                }
+            }
+            AppMessage::RequestSaved(Err(err)) => {
+                tracing::error!("failed to load workspace : {err}");
+                Task::none()
+            }
+            AppMessage::Sidebar(SidebarEvent::SelectRequest(req)) => {
+                self.active_request_id = req.id;
+                self.current_folder_id = req.folder_id;
+                self.header_bar.url = req.url;
+                self.header_bar.method = req.method.parse().unwrap_or(HttpMethod::Get);
+                self.request_panel
+                    .request_editor
+                    .set_content(&req.body)
+                    .map(RequestPanelEvent::BodyEdited)
+                    .map(AppMessage::RequestPanel)
+            }
+            AppMessage::Sidebar(SidebarEvent::CreateFolder(parent_id)) => {
+                if let Some(repo) = self.repo.clone() {
+                    Task::perform(
+                        async move {
+                            repo.save_folder("New Folder", parent_id).await?;
+                            repo.fetch_workspace_tree().await
+                        },
+                        AppMessage::WorkspaceLoaded,
+                    )
+                } else {
+                    Task::none()
+                }
+            }
             AppMessage::ScreenSize(size) => {
                 self.screen_size = size;
                 Task::none()
@@ -116,16 +243,23 @@ impl AppState {
                 )
             }
             AppMessage::RequestFinish(result) => {
-                let first_task = self.header_bar.update(HeaderBarEvent::FinishedRequest);
+                let is_success = result.is_ok();
 
+                let first_task = self.header_bar.update(HeaderBarEvent::FinishedRequest);
                 let second_task = self
                     .response_panel
                     .update(ResponsePanelEvent::ResponseReceived(result));
 
-                Task::batch(vec![
+                let mut tasks = vec![
                     first_task.map(AppMessage::Header),
                     second_task.map(AppMessage::ResponsePanel),
-                ])
+                ];
+
+                if is_success {
+                    tasks.push(Task::done(AppMessage::SaveCurrentRequest));
+                }
+
+                Task::batch(tasks)
             }
         }
     }
