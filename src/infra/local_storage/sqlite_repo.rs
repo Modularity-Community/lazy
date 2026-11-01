@@ -1,8 +1,6 @@
 use async_trait::async_trait;
 use sqlx::SqlitePool;
 
-use crate::domain::db::DBRepository;
-
 pub struct SqliteRepository {
     pub pool: SqlitePool,
 }
@@ -11,6 +9,11 @@ impl SqliteRepository {
     pub fn new(pool: SqlitePool) -> Self {
         Self { pool }
     }
+}
+
+#[async_trait]
+pub trait DBRepository {
+    async fn init_db(&self) -> Result<(), String>;
 }
 
 #[async_trait]

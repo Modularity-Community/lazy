@@ -1,57 +1,45 @@
-use crate::ui::theme::colors::{BORDER, CYAN, EDITOR_BG, MUTED, SURFACE, TEXT, VIOLET};
-use iced::{
-    Alignment, Element, Length, Task, color,
-    highlighter::{Highlighter, Settings, Theme},
-    widget::{
-        button, column, container, row,
-        space::horizontal,
-        text,
-        text_editor::{self, Edit},
-    },
+use crate::ui::{
+    component::json_editor::JsonEditor,
+    theme::colors::{BORDER, BTN_BG, CYAN, MUTED, SURFACE, TEXT, VIOLET},
 };
-use std::sync::Arc;
+use iced::{
+    Alignment, Element, Length, Task,
+    widget::{Container, button, column, container, row, space::horizontal, text},
+};
+use iced_code_editor::Message as EditorMsg;
+
 pub struct RequestPanelState {
-    pub body: text_editor::Content,
-    pub is_menu_open: bool,
+    pub request_editor: JsonEditor,
 }
 
 #[derive(Debug, Clone)]
 pub enum RequestPanelEvent {
-    BodyEdited(text_editor::Action),
+    BodyEdited(EditorMsg),
     Prettify,
-    ToggleMenu,
 }
 
 impl RequestPanelState {
     pub fn new() -> Self {
         Self {
-            body: text_editor::Content::with_text(
-                "{\n  \"name\": \"Lazy\",\n  \"enabled\": true\n}",
-            ),
-            is_menu_open: false,
+            request_editor: JsonEditor::new(""),
         }
     }
 
     pub fn update(&mut self, message: RequestPanelEvent) -> Task<RequestPanelEvent> {
         match message {
-            RequestPanelEvent::BodyEdited(action) => {
-                self.body.perform(action);
+            RequestPanelEvent::BodyEdited(event) => {
+                self.request_editor.validate();
+                self.request_editor
+                    .editor
+                    .update(&event)
+                    .map(RequestPanelEvent::BodyEdited)
             }
-            RequestPanelEvent::Prettify => self.prettify_body(),
-            RequestPanelEvent::ToggleMenu => self.is_menu_open = !self.is_menu_open,
-        }
-        Task::none()
-    }
-
-    fn prettify_body(&mut self) {
-        let raw = self.body.text();
-        if let Ok(value) = serde_json::from_str::<serde_json::Value>(&raw) {
-            if let Ok(pretty) = serde_json::to_string_pretty(&value) {
-                if pretty != raw {
-                    self.body.perform(text_editor::Action::SelectAll);
-                    self.body
-                        .perform(text_editor::Action::Edit(Edit::Paste(Arc::new(pretty))));
-                }
+            RequestPanelEvent::Prettify => {
+                self.request_editor.validate();
+                self.request_editor.editor.lose_focus();
+                self.request_editor
+                    .format()
+                    .map(RequestPanelEvent::BodyEdited)
             }
         }
     }
@@ -77,7 +65,7 @@ impl RequestPanelState {
             container(text("Body").size(12).color(VIOLET))
                 .padding([7, 10])
                 .style(|_| container::Style {
-                    background: Some(color!(0x302A48).into()),
+                    background: Some(BTN_BG.into()),
                     border: iced::Border {
                         radius: 7.0.into(),
                         ..Default::default()
@@ -92,7 +80,7 @@ impl RequestPanelState {
             .on_press(RequestPanelEvent::Prettify)
             .padding([6, 9])
             .style(|_theme, _status| iced::widget::button::Style {
-                background: Some(color!(0x22283A).into()),
+                background: Some(SURFACE.into()),
                 text_color: CYAN,
                 border: iced::Border {
                     color: BORDER,
@@ -111,34 +99,19 @@ impl RequestPanelState {
         .spacing(10)
         .align_y(Alignment::Center);
 
-        let editor = text_editor::TextEditor::new(&self.body)
-            .height(Length::Fill)
-            .on_action(RequestPanelEvent::BodyEdited)
-            .style(|_theme, _status| text_editor::Style {
-                background: EDITOR_BG.into(),
-                border: iced::Border {
-                    color: BORDER,
-                    width: 1.0,
-                    radius: 10.0.into(),
-                },
-                placeholder: MUTED,
-                value: TEXT,
-                selection: MUTED,
-            })
-            .highlight_with::<Highlighter>(
-                Settings {
-                    theme: Theme::Base16Ocean,
-                    token: "json".to_string(),
-                },
-                |high, _theme| high.to_format(),
-            );
+        let editor = Container::new(
+            self.request_editor
+                .view()
+                .map(RequestPanelEvent::BodyEdited),
+        )
+        .height(Length::Fill);
 
         container(
             column![
                 title,
                 container(tabs).padding([8, 0]),
                 container(sub_tabs).padding([4, 0]),
-                editor
+                editor,
             ]
             .spacing(8)
             .padding(16)
@@ -152,7 +125,7 @@ impl RequestPanelState {
             border: iced::Border {
                 color: BORDER,
                 width: 1.0,
-                radius: 13.0.into(),
+                radius: 1.0.into(),
             },
             ..Default::default()
         })

@@ -17,7 +17,7 @@ impl<'a, Message> LazyButton<'a, Message> for Button<'a, Message> {
             border: iced::Border {
                 color: BORDER,
                 width: 1.0,
-                radius: 7.0.into(),
+                radius: 1.0.into(),
             },
             text_color: VIOLET,
             ..Default::default()
@@ -35,7 +35,7 @@ impl<'a, Message> LazyButton<'a, Message> for Button<'a, Message> {
                 background: Some(background.into()),
                 text_color: BG,
                 border: iced::Border {
-                    radius: 9.0.into(),
+                    radius: 1.0.into(),
                     ..Default::default()
                 },
                 ..Default::default()

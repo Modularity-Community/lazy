@@ -1,20 +1,18 @@
 use iced::{
-    Alignment, Background, Element, Length, Task, color,
+    Alignment, Background, Element, Length, Task,
     widget::{Space, button, column, container, row, space::horizontal, text, text_input},
 };
 
 use crate::ui::{
     icon::icon,
-    style::button::LazyButton,
+    style::text_input::LazyTextInput,
     theme::colors::{BG, BORDER, BTN_BG, CYAN, GREEN, MUTED, TEXT, VIOLET},
 };
 
 pub struct SidebarState {}
 
 #[derive(Debug, Clone)]
-pub enum SidebarEvent {
-    SearchCollection(String),
-}
+pub enum SidebarEvent {}
 
 impl SidebarState {
     pub fn new() -> Self {
@@ -38,7 +36,7 @@ impl SidebarState {
                     border: iced::Border {
                         color: BORDER,
                         width: 1.0,
-                        radius: 7.0.into(),
+                        radius: 1.0.into(),
                     },
                     text_color: VIOLET,
                     ..Default::default()
@@ -48,24 +46,12 @@ impl SidebarState {
         .align_y(Alignment::Center);
 
         let search_bar = text_input("Search collections...", "")
-            .on_input(SidebarEvent::SearchCollection)
             .padding([9, 10])
             .size(12)
-            .style(|_theme, _status| iced::widget::text_input::Style {
-                background: color!(0x1D2030).into(),
-                border: iced::Border {
-                    color: BORDER,
-                    width: 1.0,
-                    radius: 8.0.into(),
-                },
-                icon: MUTED,
-                placeholder: MUTED,
-                value: TEXT,
-                selection: VIOLET,
-            });
+            .search_style();
 
         let collection = row![
-            icon("fa-folder_open").size(13),
+            icon("fa-folder_open").size(13).color(VIOLET),
             text("Auth API").size(13).color(TEXT),
             horizontal(),
             text("3").size(10).color(MUTED),
@@ -99,7 +85,7 @@ impl SidebarState {
         .spacing(13);
 
         let other_collection = row![
-            icon("fa-folder").size(13),
+            icon("fa-folder").size(13).color(VIOLET),
             text("User Management").size(13).color(TEXT)
         ]
         .spacing(8)

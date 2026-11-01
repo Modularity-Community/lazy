@@ -1,27 +1,22 @@
-use crate::util;
+use crate::ui::component::json_editor::JsonEditor;
 use iced::{
     Alignment, Element, Length, Padding, Task, color,
-    highlighter::{self, Highlighter},
-    widget::{
-        Space, TextEditor, column, container, row,
-        space::horizontal,
-        text,
-        text_editor::{self, Action, Content, Edit, Motion},
-    },
+    widget::{Container, Space, column, container, row, space::horizontal, text},
 };
 
-use crate::ui::theme::colors::{BORDER, CYAN, EDITOR_BG, GREEN, MUTED, RED, SURFACE, TEXT, VIOLET};
+use iced_code_editor::Message as EditorMsg;
+
+use crate::ui::theme::colors::{BORDER, CYAN, GREEN, MUTED, RED, SURFACE, TEXT, VIOLET};
 
 pub struct ResponsePanelState {
     pub status_text: String,
     pub time_text: String,
-    pub response_text: Content,
+    pub response_editor: JsonEditor,
 }
 
 #[derive(Debug, Clone)]
 pub enum ResponsePanelEvent {
-    ResponseEditorAction(Action),
-    ResponseEditorRightClick,
+    ResponseEditorAction(EditorMsg),
     ResponseReceived(Result<(String, String, String), String>),
 }
 
@@ -30,7 +25,7 @@ impl ResponsePanelState {
         Self {
             status_text: String::from("Waiting"),
             time_text: String::new(),
-            response_text: Content::with_text(
+            response_editor: JsonEditor::new(
                 "// Response data will appear here after you send a request",
             ),
         }
@@ -38,35 +33,40 @@ impl ResponsePanelState {
 
     pub fn update(&mut self, msg: ResponsePanelEvent) -> Task<ResponsePanelEvent> {
         match msg {
-            ResponsePanelEvent::ResponseEditorRightClick => Task::none(),
-            ResponsePanelEvent::ResponseEditorAction(action) => {
-                if !action.is_edit() {
-                    self.response_text.perform(action);
-                }
-                Task::none()
-            }
-            ResponsePanelEvent::ResponseReceived(result) => {
-                match result {
-                    Ok((body, status, time)) => {
-                        let body = util::make_json_pretty(&body);
-                        self.response_text = Content::with_text(&body);
-                        self.status_text = status;
-                        self.time_text = time;
+            ResponsePanelEvent::ResponseEditorAction(action) => match action {
+                EditorMsg::CharacterInput(_) => Task::none(),
+                EditorMsg::Delete | EditorMsg::DeleteSelection => Task::none(),
+                EditorMsg::Backspace => self
+                    .response_editor
+                    .editor
+                    .update(&EditorMsg::ArrowKey(
+                        iced_code_editor::ArrowDirection::Left,
+                        false,
+                    ))
+                    .map(ResponsePanelEvent::ResponseEditorAction),
+                _other => self
+                    .response_editor
+                    .editor
+                    .update(&_other)
+                    .map(ResponsePanelEvent::ResponseEditorAction),
+            },
+            ResponsePanelEvent::ResponseReceived(result) => match result {
+                Ok((body, status, time)) => {
+                    self.status_text = status;
+                    self.time_text = time;
 
-                        self.response_text
-                            .perform(Action::Move(Motion::DocumentStart));
-
-                        self.response_text.perform(Action::Edit(Edit::Backspace));
-                    }
-                    Err(err) => {
-                        self.response_text =
-                            Content::with_text(&format!("Request failed\n\n{err}"));
-                        self.status_text = String::from("Error");
-                        self.time_text.clear();
-                    }
+                    self.response_editor
+                        .set_content(&body)
+                        .map(ResponsePanelEvent::ResponseEditorAction)
                 }
-                Task::none()
-            }
+                Err(err) => {
+                    self.status_text = String::from("Error");
+                    self.time_text.clear();
+                    self.response_editor
+                        .set_content(&format!("Request failed\n\n{err}"))
+                        .map(ResponsePanelEvent::ResponseEditorAction)
+                }
+            },
         }
     }
 
@@ -97,7 +97,7 @@ impl ResponsePanelState {
                     border: iced::Border {
                         color: status_color,
                         width: 1.0,
-                        radius: 7.0.into()
+                        radius: 1.0.into()
                     },
                     ..Default::default()
                 }),
@@ -116,27 +116,12 @@ impl ResponsePanelState {
         .spacing(14)
         .align_y(Alignment::Center);
 
-        let editor = TextEditor::new(&self.response_text)
-            .height(Length::Fill)
-            .on_action(ResponsePanelEvent::ResponseEditorAction)
-            .style(|_theme, _status| text_editor::Style {
-                background: EDITOR_BG.into(),
-                border: iced::Border {
-                    color: BORDER,
-                    width: 1.0,
-                    radius: 10.0.into(),
-                },
-                placeholder: MUTED,
-                value: TEXT,
-                selection: MUTED,
-            })
-            .highlight_with::<Highlighter>(
-                highlighter::Settings {
-                    theme: highlighter::Theme::Base16Ocean,
-                    token: "json".to_string(),
-                },
-                |high, _theme| high.to_format(),
-            );
+        let editor = Container::new(
+            self.response_editor
+                .view()
+                .map(ResponsePanelEvent::ResponseEditorAction),
+        )
+        .height(Length::Fill);
 
         container(
             column![
@@ -161,7 +146,7 @@ impl ResponsePanelState {
             border: iced::Border {
                 color: BORDER,
                 width: 1.0,
-                radius: 13.0.into(),
+                radius: 1.0.into(),
             },
             ..Default::default()
         })

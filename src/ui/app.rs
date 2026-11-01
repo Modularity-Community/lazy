@@ -66,9 +66,18 @@ impl AppState {
                 if matches!(msg, HeaderBarEvent::SendReqeust) {
                     return Task::done(AppMessage::ExecuteRequest);
                 }
+                if matches!(msg, HeaderBarEvent::UrlEdited(_)) {
+                    self.response_panel.response_editor.editor.lose_focus();
+                    self.request_panel.request_editor.editor.lose_focus();
+                    return self.header_bar.update(msg).map(AppMessage::Header);
+                }
                 self.header_bar.update(msg).map(AppMessage::Header)
             }
             AppMessage::RequestPanel(msg) => {
+                if matches!(msg, RequestPanelEvent::BodyEdited(_)) {
+                    self.response_panel.response_editor.editor.lose_focus();
+                    return self.request_panel.update(msg).map(AppMessage::RequestPanel);
+                }
                 self.request_panel.update(msg).map(AppMessage::RequestPanel)
             }
             AppMessage::ResponsePanel(msg) => self
@@ -80,7 +89,7 @@ impl AppState {
                 let url = self.header_bar.url.clone();
                 let method = self.header_bar.method;
                 let client = self.http_client.clone();
-                let request = self.request_panel.body.text();
+                let request = self.request_panel.request_editor.editor.content();
 
                 Task::perform(
                     async move {
@@ -107,11 +116,16 @@ impl AppState {
                 )
             }
             AppMessage::RequestFinish(result) => {
-                self.header_bar.is_sending = false;
+                let first_task = self.header_bar.update(HeaderBarEvent::FinishedRequest);
 
-                self.response_panel
-                    .update(ResponsePanelEvent::ResponseReceived(result))
-                    .map(AppMessage::ResponsePanel)
+                let second_task = self
+                    .response_panel
+                    .update(ResponsePanelEvent::ResponseReceived(result));
+
+                Task::batch(vec![
+                    first_task.map(AppMessage::Header),
+                    second_task.map(AppMessage::ResponsePanel),
+                ])
             }
         }
     }
