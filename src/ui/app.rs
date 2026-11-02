@@ -1,18 +1,14 @@
-use std::str::FromStr;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use iced::widget::{column, container, responsive, row, scrollable};
 use iced::{Element, Length, Size, Subscription, Task, window};
-use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions, SqliteSynchronous};
 
-use crate::domain::folder_model::FolderModel;
 use crate::domain::request_model::RequestSavedModel;
 use crate::enums::auth_config::AuthConfig;
 use crate::enums::method::HttpMethod;
 use crate::infra::client::http_client::HttpClient;
-use crate::infra::local_storage::folder_repo::FolderRepository;
-use crate::infra::local_storage::request_repo::RequestSavedRepository;
+use crate::infra::local_storage::conn::init_db;
 use crate::infra::local_storage::sqlite_repo::{DBRepository, SqliteRepository};
 use crate::ui::component::header_bar::{HeaderBarEvent, HeaderBarState};
 use crate::ui::component::navbar::{NavbarEvent, NavbarMessage};
@@ -30,8 +26,6 @@ pub struct AppState {
     pub screen_size: Option<Size<f32>>,
     pub http_client: HttpClient,
     pub repo: Option<Arc<SqliteRepository>>,
-    pub active_request_id: Option<i64>,
-    pub current_folder_id: Option<i64>,
 }
 
 #[derive(Debug, Clone)]
@@ -46,9 +40,7 @@ pub enum AppMessage {
     ScreenSize(Option<Size<f32>>),
 
     DatabaseReady(Result<Arc<SqliteRepository>, String>),
-    WorkspaceLoaded(Result<Vec<FolderModel>, String>),
-    SaveCurrentRequest,
-    RequestSaved(Result<i64, String>),
+    None,
 }
 
 impl AppState {
@@ -62,27 +54,22 @@ impl AppState {
             screen_size: None,
             http_client: HttpClient::new(),
             repo: None,
-            current_folder_id: None,
-            active_request_id: None,
         };
-
-        let options = SqliteConnectOptions::from_str("sqlite://lazy_rest.db?mode=rwc")
-            .unwrap()
-            .journal_mode(SqliteJournalMode::Wal)
-            .synchronous(SqliteSynchronous::Normal)
-            .busy_timeout(Duration::from_secs(5));
 
         let init_task = Task::perform(
             async {
-                let pool = SqlitePoolOptions::new()
-                    .max_connections(5)
-                    .connect_with(options)
-                    .await
-                    .map_err(|e| e.to_string())?;
-
-                let repo = SqliteRepository::new(pool);
-                repo.init_db().await?;
-                Ok(Arc::new(repo))
+                let pool = init_db().await.map_err(|e| e.to_string());
+                match pool {
+                    Ok(p) => {
+                        let repo = SqliteRepository::new(p);
+                        repo.init_db().await?;
+                        Ok(Arc::new(repo))
+                    }
+                    Err(err) => {
+                        tracing::error!("failed init app, because pooling db err : {err}");
+                        Err(err)
+                    }
+                }
             },
             AppMessage::DatabaseReady,
         );
@@ -96,72 +83,33 @@ impl AppState {
 
     pub fn update(&mut self, message: AppMessage, _now: Instant) -> Task<AppMessage> {
         match message {
+            AppMessage::None => Task::none(),
             AppMessage::DatabaseReady(Ok(repo)) => {
+                tracing::info!("database ready");
                 self.repo = Some(repo.clone());
-                Task::perform(
-                    async move { repo.fetch_workspace_tree().await },
-                    AppMessage::WorkspaceLoaded,
-                )
+                Task::none()
             }
             AppMessage::DatabaseReady(Err(err)) => {
                 tracing::error!("failed to initialize db: {err}");
                 Task::none()
             }
-            AppMessage::WorkspaceLoaded(Ok(tree)) => {
-                self.sidebar.folders = tree;
-                Task::none()
-            }
-            AppMessage::WorkspaceLoaded(Err(err)) => {
-                tracing::error!("failed to load workspace : {err}");
-                Task::none()
-            }
-            AppMessage::SaveCurrentRequest => {
-                if let Some(repo) = self.repo.clone() {
-                    let req_model = RequestSavedModel {
-                        id: self.active_request_id,
-                        folder_id: self.current_folder_id,
-                        name: "New Request".to_string(),
-                        method: self.header_bar.method.to_string(),
-                        url: self.header_bar.url.clone(),
-                        headers: vec![],
-                        params: vec![],
-                        auth: AuthConfig::None,
-                        body: self.request_panel.request_editor.editor.content(),
-                    };
-
-                    Task::perform(
-                        async move {
-                            if req_model.id.is_some() {
-                                repo.update_request(&req_model).await?;
-                                Ok(req_model.id.unwrap())
-                            } else {
-                                repo.save_request(&req_model).await
-                            }
-                        },
-                        AppMessage::RequestSaved,
-                    )
-                } else {
-                    Task::none()
-                }
-            }
-            AppMessage::RequestSaved(Ok(inserted_id)) => {
-                self.active_request_id = Some(inserted_id);
-                if let Some(repo) = self.repo.clone() {
-                    Task::perform(
-                        async move { repo.fetch_workspace_tree().await },
-                        AppMessage::WorkspaceLoaded,
-                    )
-                } else {
-                    Task::none()
-                }
-            }
-            AppMessage::RequestSaved(Err(err)) => {
-                tracing::error!("failed to load workspace : {err}");
-                Task::none()
-            }
+            // AppMessage::RequestSaved(Ok(inserted_id)) => {
+            //     self.active_request_id = Some(inserted_id);
+            //     tracing::info!("saved request id {inserted_id}");
+            //     if let Some(repo) = self.repo.clone() {
+            //         Task::perform(
+            //             async move { repo.fetch_workspace_tree().await },
+            //             AppMessage::WorkspaceLoaded,
+            //         )
+            //     } else {
+            //         Task::none()
+            //     }
+            // }
+            // AppMessage::RequestSaved(Err(err)) => {
+            //     tracing::error!("failed to load workspace : {err}");
+            //     Task::none()
+            // }
             AppMessage::Sidebar(SidebarEvent::SelectRequest(req)) => {
-                self.active_request_id = req.id;
-                self.current_folder_id = req.folder_id;
                 self.header_bar.url = req.url;
                 self.header_bar.method = req.method.parse().unwrap_or(HttpMethod::Get);
                 self.request_panel
@@ -171,24 +119,28 @@ impl AppState {
                     .map(AppMessage::RequestPanel)
             }
             AppMessage::Sidebar(SidebarEvent::CreateFolder(parent_id)) => {
-                if let Some(repo) = self.repo.clone() {
-                    Task::perform(
-                        async move {
-                            repo.save_folder("New Folder", parent_id).await?;
-                            repo.fetch_workspace_tree().await
-                        },
-                        AppMessage::WorkspaceLoaded,
-                    )
-                } else {
-                    Task::none()
-                }
+                // if let Some(repo) = self.repo.clone() {
+                //     Task::perform(
+                //         async move {
+                //             repo.save_folder("New Folder", parent_id).await?;
+                //             repo.fetch_workspace_tree().await
+                //         },
+                //         AppMessage::WorkspaceLoaded,
+                //     )
+                // } else {
+                //     Task::none()
+                // }
+                Task::none()
             }
             AppMessage::ScreenSize(size) => {
                 self.screen_size = size;
                 Task::none()
             }
             AppMessage::Navbar(msg) => self.navbar.update(msg).map(AppMessage::Navbar),
-            AppMessage::Sidebar(msg) => self.sidebar.update(msg).map(AppMessage::Sidebar),
+            AppMessage::Sidebar(msg) => self
+                .sidebar
+                .update(msg, self.repo.as_ref())
+                .map(AppMessage::Sidebar),
             AppMessage::Header(msg) => {
                 if matches!(msg, HeaderBarEvent::SendReqeust) {
                     return Task::done(AppMessage::ExecuteRequest);
@@ -255,8 +207,24 @@ impl AppState {
                     second_task.map(AppMessage::ResponsePanel),
                 ];
 
+                tracing::info!("result success {is_success}");
                 if is_success {
-                    tasks.push(Task::done(AppMessage::SaveCurrentRequest));
+                    //     tasks.push(Task::done(AppMessage::SaveCurrentRequest));
+                    let req_model = RequestSavedModel {
+                        id: None,
+                        folder_id: None,
+                        name: "New Request".to_string(),
+                        method: self.header_bar.method.to_string(),
+                        url: self.header_bar.url.clone(),
+                        headers: vec![],
+                        params: vec![],
+                        auth: AuthConfig::None,
+                        body: self.request_panel.request_editor.editor.content(),
+                    };
+
+                    tasks.push(Task::done(AppMessage::Sidebar(
+                        SidebarEvent::CreateRequest(req_model),
+                    )));
                 }
 
                 Task::batch(tasks)
