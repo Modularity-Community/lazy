@@ -87,50 +87,24 @@ impl AppState {
             AppMessage::DatabaseReady(Ok(repo)) => {
                 tracing::info!("database ready");
                 self.repo = Some(repo.clone());
-                Task::none()
+                Task::done(AppMessage::Sidebar(SidebarEvent::WorkspaceLoaded))
             }
             AppMessage::DatabaseReady(Err(err)) => {
                 tracing::error!("failed to initialize db: {err}");
                 Task::none()
             }
-            // AppMessage::RequestSaved(Ok(inserted_id)) => {
-            //     self.active_request_id = Some(inserted_id);
-            //     tracing::info!("saved request id {inserted_id}");
-            //     if let Some(repo) = self.repo.clone() {
-            //         Task::perform(
-            //             async move { repo.fetch_workspace_tree().await },
-            //             AppMessage::WorkspaceLoaded,
-            //         )
-            //     } else {
-            //         Task::none()
-            //     }
-            // }
-            // AppMessage::RequestSaved(Err(err)) => {
-            //     tracing::error!("failed to load workspace : {err}");
-            //     Task::none()
-            // }
             AppMessage::Sidebar(SidebarEvent::SelectRequest(req)) => {
                 self.header_bar.url = req.url;
                 self.header_bar.method = req.method.parse().unwrap_or(HttpMethod::Get);
-                self.request_panel
-                    .request_editor
-                    .set_content(&req.body)
-                    .map(RequestPanelEvent::BodyEdited)
-                    .map(AppMessage::RequestPanel)
-            }
-            AppMessage::Sidebar(SidebarEvent::CreateFolder(parent_id)) => {
-                // if let Some(repo) = self.repo.clone() {
-                //     Task::perform(
-                //         async move {
-                //             repo.save_folder("New Folder", parent_id).await?;
-                //             repo.fetch_workspace_tree().await
-                //         },
-                //         AppMessage::WorkspaceLoaded,
-                //     )
-                // } else {
-                //     Task::none()
-                // }
-                Task::none()
+                self.sidebar.active_request_id = req.id;
+                self.sidebar.current_folder_id = req.folder_id;
+                let task_response = self
+                    .response_panel
+                    .response_editor
+                    .set_content(&req.response.unwrap_or_default());
+                let task_request = self.request_panel.request_editor.set_content(&req.body);
+
+                Task::batch(vec![task_response, task_request]).map(|_e| AppMessage::None)
             }
             AppMessage::ScreenSize(size) => {
                 self.screen_size = size;
@@ -159,10 +133,18 @@ impl AppState {
                 }
                 self.request_panel.update(msg).map(AppMessage::RequestPanel)
             }
-            AppMessage::ResponsePanel(msg) => self
-                .response_panel
-                .update(msg)
-                .map(AppMessage::ResponsePanel),
+            AppMessage::ResponsePanel(msg) => {
+                if matches!(msg, ResponsePanelEvent::ResponseEditorAction(_)) {
+                    self.request_panel.request_editor.editor.lose_focus();
+                    return self
+                        .response_panel
+                        .update(msg)
+                        .map(AppMessage::ResponsePanel);
+                }
+                self.response_panel
+                    .update(msg)
+                    .map(AppMessage::ResponsePanel)
+            }
             AppMessage::ExecuteRequest => {
                 self.header_bar.is_sending = true;
                 let url = self.header_bar.url.clone();
@@ -207,12 +189,12 @@ impl AppState {
                     second_task.map(AppMessage::ResponsePanel),
                 ];
 
-                tracing::info!("result success {is_success}");
                 if is_success {
-                    //     tasks.push(Task::done(AppMessage::SaveCurrentRequest));
+                    let request_id = self.sidebar.active_request_id;
+                    let folder_id = self.sidebar.current_folder_id;
                     let req_model = RequestSavedModel {
-                        id: None,
-                        folder_id: None,
+                        id: request_id,
+                        folder_id: folder_id,
                         name: "New Request".to_string(),
                         method: self.header_bar.method.to_string(),
                         url: self.header_bar.url.clone(),
@@ -220,10 +202,11 @@ impl AppState {
                         params: vec![],
                         auth: AuthConfig::None,
                         body: self.request_panel.request_editor.editor.content(),
+                        response: Some(self.response_panel.response_editor.editor.content()),
                     };
 
                     tasks.push(Task::done(AppMessage::Sidebar(
-                        SidebarEvent::CreateRequest(req_model),
+                        SidebarEvent::SaveCurrentRequest(req_model),
                     )));
                 }
 

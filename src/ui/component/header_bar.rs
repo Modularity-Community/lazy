@@ -1,7 +1,7 @@
 use crate::{
     enums::method::HttpMethod,
     ui::{
-        style::{button::LazyButton, text_input::LazyTextInput},
+        style::{button::LazyButton, method_color::get_method_color, text_input::LazyTextInput},
         theme::colors::{BG, BORDER, CYAN, GREEN, MUTED, ORANGE, RED, SURFACE, VIOLET},
     },
 };
@@ -25,16 +25,6 @@ pub enum HeaderBarEvent {
 }
 
 impl HeaderBarState {
-    fn get_method_color(method: &HttpMethod) -> iced::Color {
-        match method {
-            HttpMethod::Get => CYAN,
-            HttpMethod::Post => GREEN,
-            HttpMethod::Put | HttpMethod::Patch => ORANGE,
-            HttpMethod::Delete => RED,
-            // _ => VIOLET,
-        }
-    }
-
     pub fn new() -> Self {
         Self {
             url: String::from("https://jsonplaceholder.typicode.com/posts"),
@@ -72,13 +62,13 @@ impl HeaderBarState {
         .style(|_theme, _status| iced::widget::pick_list::Style {
             background: SURFACE.into(),
             border: iced::Border {
-                color: Self::get_method_color(&self.method),
+                color: get_method_color(&self.method),
                 width: 1.0,
                 radius: 1.0.into(),
             },
-            text_color: Self::get_method_color(&self.method),
+            text_color: get_method_color(&self.method),
             placeholder_color: MUTED,
-            handle_color: Self::get_method_color(&self.method),
+            handle_color: get_method_color(&self.method),
         })
         .width(Length::Fixed(104.0))
         .padding([10, 9]);

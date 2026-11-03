@@ -20,4 +20,5 @@ pub struct RequestSavedModel {
     pub params: Vec<KeyValuePair>,
     pub auth: AuthConfig,
     pub body: String,
+    pub response: Option<String>,
 }

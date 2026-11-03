@@ -9,13 +9,14 @@ use crate::{
     domain::{
         folder_model::FolderModel, request_model::RequestSavedModel, workspace_tree::WorkspaceTree,
     },
+    enums::method::HttpMethod,
     infra::local_storage::{
         folder_repo::FolderRepository, request_repo::RequestSavedRepository,
         sqlite_repo::SqliteRepository,
     },
     ui::{
         icon::icon,
-        style::text_input::LazyTextInput,
+        style::{method_color::get_method_color, text_input::LazyTextInput},
         theme::colors::{BG, BORDER, BTN_BG, CYAN, GREEN, MUTED, TEXT, VIOLET},
     },
 };
@@ -74,17 +75,6 @@ impl SidebarState {
             SidebarEvent::CreateRequest(request) => {
                 if let Some(repo) = repo {
                     let repo = repo.clone();
-                    // let new_req = RequestSavedModel {
-                    //     id: None,
-                    //     folder_id: id,
-                    //     name: "Untitled Request".to_string(),
-                    //     method: "GET".to_string(),
-                    //     url: "https://httpbin.org/get".to_string(),
-                    //     headers: vec![],
-                    //     params: vec![],
-                    //     auth: AuthConfig::None,
-                    //     body: String::new(),
-                    // };
 
                     Task::perform(
                         async move {
@@ -124,7 +114,7 @@ impl SidebarState {
                         SidebarEvent::WorkspaceRender,
                     )
                 } else {
-                    tracing::warn!("Repository belum siap");
+                    tracing::warn!("repo is not ready yet");
                     Task::none()
                 }
             }
@@ -177,46 +167,6 @@ impl SidebarState {
         for req in &self.root_requests {
             workspace_tree = workspace_tree.push(Self::render_request_item(req, 0));
         }
-        // let collection = row![
-        //     icon("fa-folder_open").size(13).color(VIOLET),
-        //     text("Auth API").size(13).color(TEXT),
-        //     horizontal(),
-        //     text("3").size(10).color(MUTED),
-        // ]
-        // .spacing(8)
-        // .align_y(Alignment::Center);
-
-        // let requests = column![
-        //     row![
-        //         Space::new().width(15),
-        //         text("POST").size(10).color(GREEN),
-        //         text("Login").size(12).color(TEXT)
-        //     ]
-        //     .spacing(8)
-        //     .align_y(Alignment::Center),
-        //     row![
-        //         Space::new().width(15),
-        //         text("GET").size(10).color(CYAN),
-        //         text("Profile").size(12).color(MUTED)
-        //     ]
-        //     .spacing(8)
-        //     .align_y(Alignment::Center),
-        //     row![
-        //         Space::new().width(15),
-        //         text("POST").size(10).color(GREEN),
-        //         text("Refresh Token").size(12).color(MUTED)
-        //     ]
-        //     .spacing(8)
-        //     .align_y(Alignment::Center),
-        // ]
-        // .spacing(13);
-        //
-        // let other_collection = row![
-        //     icon("fa-folder").size(13).color(VIOLET),
-        //     text("User Management").size(13).color(TEXT)
-        // ]
-        // .spacing(8)
-        // .align_y(Alignment::Center);
 
         container(
             column![header, search_bar, Space::new().width(5), workspace_tree]
@@ -272,11 +222,8 @@ impl SidebarState {
         depth: usize,
     ) -> Element<'a, SidebarEvent> {
         let indent = (depth * 12) as f32;
-        let method_color = match req.method.as_str() {
-            "GET" => CYAN,
-            "POST" => GREEN,
-            _ => VIOLET,
-        };
+        let method = req.method.parse().unwrap_or(HttpMethod::Get);
+        let method_color = get_method_color(&method);
 
         button(
             row![

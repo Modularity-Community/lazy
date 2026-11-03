@@ -23,8 +23,8 @@ impl RequestSavedRepository for SqliteRepository {
 
         let result = sqlx::query(
             r#"
-            INSERT INTO requests (folder_id, name, method, url, headers, params, auth, body)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO requests (folder_id, name, method, url, headers, params, auth, body, response)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             "#,
         )
         .bind(req.folder_id)
@@ -35,6 +35,7 @@ impl RequestSavedRepository for SqliteRepository {
         .bind(params_json)
         .bind(auth_json)
         .bind(&req.body)
+        .bind(&req.response)
         .execute(&self.pool)
         .await
         .map_err(|e| e.to_string())?;
@@ -53,7 +54,7 @@ impl RequestSavedRepository for SqliteRepository {
         sqlx::query(
             r#"
             UPDATE requests 
-            SET folder_id = ?, name = ?, method = ?, url = ?, headers = ?, params = ?, auth = ?, body = ?, updated_at = CURRENT_TIMESTAMP
+            SET folder_id = ?, name = ?, method = ?, url = ?, headers = ?, params = ?, auth = ?, body = ?, updated_at = CURRENT_TIMESTAMP, response = ?
             WHERE id = ?
             "#,
         )
@@ -65,6 +66,7 @@ impl RequestSavedRepository for SqliteRepository {
         .bind(params_json)
         .bind(auth_json)
         .bind(&req.body)
+        .bind(&req.response)
         .bind(id)
         .execute(&self.pool)
         .await
@@ -103,6 +105,7 @@ impl RequestSavedRepository for SqliteRepository {
             params: serde_json::from_str(&params_raw).unwrap_or_default(),
             auth: serde_json::from_str(&auth_raw).unwrap_or(AuthConfig::None),
             body: row.get("body"),
+            response: row.get("response"),
         })
     }
 }

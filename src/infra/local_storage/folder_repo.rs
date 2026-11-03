@@ -55,6 +55,7 @@ impl FolderRepository for SqliteRepository {
         let mut requests_by_folder: HashMap<Option<i64>, Vec<RequestSavedModel>> = HashMap::new();
         for row in request_rows {
             let folder_id: Option<i64> = row.get("folder_id");
+            let response: Option<String> = row.get("response");
             let req = RequestSavedModel {
                 id: Some(row.get("id")),
                 folder_id,
@@ -65,6 +66,7 @@ impl FolderRepository for SqliteRepository {
                 params: serde_json::from_str(row.get("params")).unwrap_or_default(),
                 auth: serde_json::from_str(row.get("auth")).unwrap_or(AuthConfig::None),
                 body: row.get("body"),
+                response: response,
             };
             requests_by_folder.entry(folder_id).or_default().push(req);
         }
