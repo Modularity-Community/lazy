@@ -1,37 +1,134 @@
+use std::sync::Arc;
+
 use iced::{
     Alignment, Background, Element, Length, Task,
     widget::{Space, button, column, container, row, space::horizontal, text, text_input},
 };
 
 use crate::{
-    domain::{folder_model::FolderModel, request_model::RequestSavedModel},
+    domain::{
+        folder_model::FolderModel, request_model::RequestSavedModel, workspace_tree::WorkspaceTree,
+    },
+    enums::method::HttpMethod,
+    infra::local_storage::{
+        folder_repo::FolderRepository, request_repo::RequestSavedRepository,
+        sqlite_repo::SqliteRepository,
+    },
     ui::{
         icon::icon,
-        style::text_input::LazyTextInput,
+        style::{method_color::get_method_color, text_input::LazyTextInput},
         theme::colors::{BG, BORDER, BTN_BG, CYAN, GREEN, MUTED, TEXT, VIOLET},
     },
 };
 
 pub struct SidebarState {
     pub folders: Vec<FolderModel>,
+    pub root_requests: Vec<RequestSavedModel>,
+
+    pub active_request_id: Option<i64>,
+    pub current_folder_id: Option<i64>,
 }
 
 #[derive(Debug, Clone)]
 pub enum SidebarEvent {
     SearchCollection(String),
     SelectRequest(RequestSavedModel),
-    CreateFolder(Option<i64>),  //parent_id
-    CreateRequest(Option<i64>), //folder_id
+    CreateFolder(Option<i64>),        //parent_id
+    CreateRequest(RequestSavedModel), //folder_id
+    SaveCurrentRequest(RequestSavedModel),
+
+    WorkspaceLoaded,
+    WorkspaceRender(Result<WorkspaceTree, String>),
 }
 
 impl SidebarState {
     pub fn new() -> Self {
         Self {
             folders: Vec::new(),
+            root_requests: Vec::new(),
+            active_request_id: None,
+            current_folder_id: None,
         }
     }
-    pub fn update(&mut self, _: SidebarEvent) -> Task<SidebarEvent> {
-        Task::none()
+    pub fn update(
+        &mut self,
+        event: SidebarEvent,
+        repo: Option<&Arc<SqliteRepository>>,
+    ) -> Task<SidebarEvent> {
+        match event {
+            SidebarEvent::SearchCollection(val) => Task::none(),
+            SidebarEvent::SelectRequest(data) => Task::none(),
+            SidebarEvent::CreateFolder(id) => {
+                if let Some(repo) = repo {
+                    let repo = repo.clone();
+                    Task::perform(
+                        async move {
+                            repo.save_folder("New Folder", id).await?;
+                            repo.fetch_workspace_tree().await
+                        },
+                        SidebarEvent::WorkspaceRender,
+                    )
+                } else {
+                    Task::none()
+                }
+            }
+            SidebarEvent::CreateRequest(request) => {
+                if let Some(repo) = repo {
+                    let repo = repo.clone();
+
+                    Task::perform(
+                        async move {
+                            repo.save_request(&request).await?;
+                            repo.fetch_workspace_tree().await
+                        },
+                        SidebarEvent::WorkspaceRender,
+                    )
+                } else {
+                    Task::none()
+                }
+            }
+            SidebarEvent::SaveCurrentRequest(req_model) => {
+                if let Some(repo) = repo {
+                    let repo = repo.clone();
+                    Task::perform(
+                        async move {
+                            if req_model.id.is_some() {
+                                repo.update_request(&req_model).await?;
+                                Ok(req_model.id.unwrap())
+                            } else {
+                                repo.save_request(&req_model).await
+                            }
+                        },
+                        |_e| SidebarEvent::WorkspaceLoaded,
+                    )
+                } else {
+                    tracing::error!("failed to save request ");
+                    Task::none()
+                }
+            }
+            SidebarEvent::WorkspaceLoaded => {
+                if let Some(repo) = repo {
+                    let repo = repo.clone();
+                    Task::perform(
+                        async move { repo.fetch_workspace_tree().await },
+                        SidebarEvent::WorkspaceRender,
+                    )
+                } else {
+                    tracing::warn!("repo is not ready yet");
+                    Task::none()
+                }
+            }
+            SidebarEvent::WorkspaceRender(result) => {
+                match result {
+                    Ok(res) => {
+                        self.folders = res.folders;
+                        self.root_requests = res.requests;
+                    }
+                    Err(err) => tracing::error!("Failed render workspace: {err}"),
+                }
+                Task::none()
+            }
+        }
     }
 
     pub fn view<'a>(&'a self) -> Element<'a, SidebarEvent> {
@@ -66,46 +163,10 @@ impl SidebarState {
         for folder in &self.folders {
             workspace_tree = workspace_tree.push(Self::render_folder(folder, 0));
         }
-        // let collection = row![
-        //     icon("fa-folder_open").size(13).color(VIOLET),
-        //     text("Auth API").size(13).color(TEXT),
-        //     horizontal(),
-        //     text("3").size(10).color(MUTED),
-        // ]
-        // .spacing(8)
-        // .align_y(Alignment::Center);
 
-        // let requests = column![
-        //     row![
-        //         Space::new().width(15),
-        //         text("POST").size(10).color(GREEN),
-        //         text("Login").size(12).color(TEXT)
-        //     ]
-        //     .spacing(8)
-        //     .align_y(Alignment::Center),
-        //     row![
-        //         Space::new().width(15),
-        //         text("GET").size(10).color(CYAN),
-        //         text("Profile").size(12).color(MUTED)
-        //     ]
-        //     .spacing(8)
-        //     .align_y(Alignment::Center),
-        //     row![
-        //         Space::new().width(15),
-        //         text("POST").size(10).color(GREEN),
-        //         text("Refresh Token").size(12).color(MUTED)
-        //     ]
-        //     .spacing(8)
-        //     .align_y(Alignment::Center),
-        // ]
-        // .spacing(13);
-        //
-        // let other_collection = row![
-        //     icon("fa-folder").size(13).color(VIOLET),
-        //     text("User Management").size(13).color(TEXT)
-        // ]
-        // .spacing(8)
-        // .align_y(Alignment::Center);
+        for req in &self.root_requests {
+            workspace_tree = workspace_tree.push(Self::render_request_item(req, 0));
+        }
 
         container(
             column![header, search_bar, Space::new().width(5), workspace_tree]
@@ -137,7 +198,7 @@ impl SidebarState {
             text(&folder.name).size(13).color(TEXT),
             horizontal(),
             button(text("+").size(10))
-                .on_press(SidebarEvent::CreateRequest(folder.id))
+                // .on_press(SidebarEvent::CreateRequest())
                 .padding([2, 5]),
         ]
         .spacing(6)
@@ -150,27 +211,31 @@ impl SidebarState {
         }
 
         for req in &folder.requests {
-            let method_color = match req.method.as_str() {
-                "GET" => CYAN,
-                "POST" => GREEN,
-                _ => VIOLET,
-            };
-
-            let req_item = button(
-                row![
-                    Space::new().width(indent + 12.0),
-                    text(&req.method).size(9).color(method_color),
-                    text(&req.name).size(12).color(TEXT),
-                ]
-                .spacing(8)
-                .align_y(Alignment::Center),
-            )
-            .on_press(SidebarEvent::SelectRequest(req.clone()))
-            .style(|_, _| button::Style::default());
-
-            children = children.push(req_item);
+            children = children.push(Self::render_request_item(req, depth + 1));
         }
 
         children.into()
+    }
+
+    fn render_request_item<'a>(
+        req: &'a RequestSavedModel,
+        depth: usize,
+    ) -> Element<'a, SidebarEvent> {
+        let indent = (depth * 12) as f32;
+        let method = req.method.parse().unwrap_or(HttpMethod::Get);
+        let method_color = get_method_color(&method);
+
+        button(
+            row![
+                Space::new().width(indent),
+                text(&req.method).size(9).color(method_color),
+                text(&req.name).size(12).color(TEXT),
+            ]
+            .spacing(8)
+            .align_y(Alignment::Center),
+        )
+        .on_press(SidebarEvent::SelectRequest(req.clone()))
+        .style(|_, _| button::Style::default())
+        .into()
     }
 }
