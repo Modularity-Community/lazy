@@ -1,13 +1,18 @@
 use std::sync::Arc;
 
 use iced::{
-    Alignment, Background, Element, Length, Task,
-    widget::{Space, button, column, container, row, space::horizontal, text, text_input},
+    Alignment, Background, Element, Length, Point, Task,
+    widget::{
+        Space, button, column, container, mouse_area, row, space::horizontal, text, text_input,
+    },
 };
 
 use crate::{
     domain::{
-        folder_model::FolderModel, request_model::RequestSavedModel, workspace_tree::WorkspaceTree,
+        context_menu_data::{ContextMenuData, ContextTarget},
+        folder_model::FolderModel,
+        request_model::RequestSavedModel,
+        workspace_tree::WorkspaceTree,
     },
     enums::method::HttpMethod,
     infra::local_storage::{
@@ -15,9 +20,10 @@ use crate::{
         sqlite_repo::SqliteRepository,
     },
     ui::{
+        component::context_menu_widget::ContextMenu,
         icon::icon,
         style::{method_color::get_method_color, text_input::LazyTextInput},
-        theme::colors::{BG, BORDER, BTN_BG, CYAN, GREEN, MUTED, TEXT, VIOLET},
+        theme::colors::{BG, BORDER, BTN_BG, MUTED, TEXT, VIOLET},
     },
 };
 
@@ -27,6 +33,7 @@ pub struct SidebarState {
 
     pub active_request_id: Option<i64>,
     pub current_folder_id: Option<i64>,
+    pub context_menu: Option<ContextMenuData>,
 }
 
 #[derive(Debug, Clone)]
@@ -39,6 +46,8 @@ pub enum SidebarEvent {
 
     WorkspaceLoaded,
     WorkspaceRender(Result<WorkspaceTree, String>),
+    OpenContextMenu(ContextTarget, Point),
+    CloseContextMenu,
 }
 
 impl SidebarState {
@@ -48,6 +57,7 @@ impl SidebarState {
             root_requests: Vec::new(),
             active_request_id: None,
             current_folder_id: None,
+            context_menu: None,
         }
     }
     pub fn update(
@@ -56,8 +66,17 @@ impl SidebarState {
         repo: Option<&Arc<SqliteRepository>>,
     ) -> Task<SidebarEvent> {
         match event {
-            SidebarEvent::SearchCollection(val) => Task::none(),
-            SidebarEvent::SelectRequest(data) => Task::none(),
+            SidebarEvent::OpenContextMenu(target, position) => {
+                self.context_menu = Some(ContextMenuData { target, position });
+
+                Task::none()
+            }
+            SidebarEvent::CloseContextMenu => {
+                self.context_menu = None;
+                Task::none()
+            }
+            SidebarEvent::SearchCollection(_val) => Task::none(),
+            SidebarEvent::SelectRequest(_data) => Task::none(),
             SidebarEvent::CreateFolder(id) => {
                 if let Some(repo) = repo {
                     let repo = repo.clone();
@@ -92,9 +111,9 @@ impl SidebarState {
                     let repo = repo.clone();
                     Task::perform(
                         async move {
-                            if req_model.id.is_some() {
+                            if let Some(id) = req_model.id {
                                 repo.update_request(&req_model).await?;
-                                Ok(req_model.id.unwrap())
+                                Ok(id)
                             } else {
                                 repo.save_request(&req_model).await
                             }
@@ -161,11 +180,12 @@ impl SidebarState {
 
         let mut workspace_tree = column![].spacing(6);
         for folder in &self.folders {
-            workspace_tree = workspace_tree.push(Self::render_folder(folder, 0));
+            workspace_tree = workspace_tree.push(Self::render_folder(folder, 0, self.context_menu));
         }
 
         for req in &self.root_requests {
-            workspace_tree = workspace_tree.push(Self::render_request_item(req, 0));
+            workspace_tree =
+                workspace_tree.push(Self::render_request_item(req, 0, self.context_menu));
         }
 
         container(
@@ -189,7 +209,11 @@ impl SidebarState {
         .into()
     }
 
-    fn render_folder<'a>(folder: &'a FolderModel, depth: usize) -> Element<'a, SidebarEvent> {
+    fn render_folder<'a>(
+        folder: &'a FolderModel,
+        depth: usize,
+        active_menu: Option<ContextMenuData>,
+    ) -> Element<'a, SidebarEvent> {
         let indent = (depth * 12) as f32;
 
         let folder_header = row![
@@ -197,21 +221,31 @@ impl SidebarState {
             icon("fa-folder").size(13).color(VIOLET),
             text(&folder.name).size(13).color(TEXT),
             horizontal(),
-            button(text("+").size(10))
-                // .on_press(SidebarEvent::CreateRequest())
-                .padding([2, 5]),
+            button(text("+").size(10)).padding([2, 5]),
         ]
         .spacing(6)
         .align_y(Alignment::Center);
 
+        let target = ContextTarget::Folder(77);
+
+        let position =
+            active_menu.and_then(|menu| (menu.target == target).then_some(menu.position));
+
+        let folder_header = ContextMenu::new(
+            folder_header,
+            position,
+            move |point| SidebarEvent::OpenContextMenu(target, point),
+            SidebarEvent::CloseContextMenu,
+        );
+
         let mut children = column![folder_header].spacing(4);
 
         for subfolder in &folder.subfolders {
-            children = children.push(Self::render_folder(subfolder, depth + 1));
+            children = children.push(Self::render_folder(subfolder, depth + 1, active_menu));
         }
 
         for req in &folder.requests {
-            children = children.push(Self::render_request_item(req, depth + 1));
+            children = children.push(Self::render_request_item(req, depth + 1, active_menu));
         }
 
         children.into()
@@ -220,22 +254,35 @@ impl SidebarState {
     fn render_request_item<'a>(
         req: &'a RequestSavedModel,
         depth: usize,
+        active_menu: Option<ContextMenuData>,
     ) -> Element<'a, SidebarEvent> {
         let indent = (depth * 12) as f32;
         let method = req.method.parse().unwrap_or(HttpMethod::Get);
         let method_color = get_method_color(&method);
 
-        button(
-            row![
-                Space::new().width(indent),
-                text(&req.method).size(9).color(method_color),
-                text(&req.name).size(12).color(TEXT),
-            ]
-            .spacing(8)
-            .align_y(Alignment::Center),
-        )
-        .on_press(SidebarEvent::SelectRequest(req.clone()))
-        .style(|_, _| button::Style::default())
-        .into()
+        let item_content = row![
+            Space::new().width(indent),
+            text(&req.method).size(9).color(method_color),
+            text(&req.name).size(12).color(TEXT),
+        ]
+        .spacing(8)
+        .align_y(Alignment::Center);
+
+        let target = ContextTarget::Folder(77);
+
+        let position =
+            active_menu.and_then(|menu| (menu.target == target).then_some(menu.position));
+
+        let context_mn = ContextMenu::new(
+            item_content,
+            position,
+            move |point| SidebarEvent::OpenContextMenu(target, point),
+            SidebarEvent::CloseContextMenu,
+        );
+
+        container(mouse_area(context_mn).on_press(SidebarEvent::SelectRequest(req.clone())))
+            .width(Length::Fill)
+            .padding(5.0)
+            .into()
     }
 }

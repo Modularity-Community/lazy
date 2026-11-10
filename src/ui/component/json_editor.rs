@@ -106,7 +106,6 @@ impl JsonEditor {
             Container::new(Text::new(diag).size(11).color(Color::from([0.9, 0.3, 0.3])))
                 .padding(4)
                 .width(Length::Fill)
-                .into()
         };
 
         Column::new()

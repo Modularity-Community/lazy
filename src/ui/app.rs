@@ -173,7 +173,7 @@ impl AppState {
                             Err(err) => Err(err.to_string()),
                         }
                     },
-                    |e| AppMessage::RequestFinish(e),
+                    AppMessage::RequestFinish,
                 )
             }
             AppMessage::RequestFinish(result) => {
@@ -194,7 +194,7 @@ impl AppState {
                     let folder_id = self.sidebar.current_folder_id;
                     let req_model = RequestSavedModel {
                         id: request_id,
-                        folder_id: folder_id,
+                        folder_id,
                         name: "New Request".to_string(),
                         method: self.header_bar.method.to_string(),
                         url: self.header_bar.url.clone(),

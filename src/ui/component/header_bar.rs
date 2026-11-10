@@ -2,7 +2,7 @@ use crate::{
     enums::method::HttpMethod,
     ui::{
         style::{button::LazyButton, method_color::get_method_color, text_input::LazyTextInput},
-        theme::colors::{BG, BORDER, CYAN, GREEN, MUTED, ORANGE, RED, SURFACE, VIOLET},
+        theme::colors::{BG, BORDER, MUTED, SURFACE, VIOLET},
     },
 };
 use iced::{
