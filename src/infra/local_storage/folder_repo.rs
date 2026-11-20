@@ -66,7 +66,7 @@ impl FolderRepository for SqliteRepository {
                 params: serde_json::from_str(row.get("params")).unwrap_or_default(),
                 auth: serde_json::from_str(row.get("auth")).unwrap_or(AuthConfig::None),
                 body: row.get("body"),
-                response: response,
+                response,
             };
             requests_by_folder.entry(folder_id).or_default().push(req);
         }
