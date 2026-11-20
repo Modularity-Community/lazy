@@ -2,6 +2,7 @@ use iced::Point;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ContextTarget {
+    Workspace,
     Folder(i64),
     Request(i64),
 }

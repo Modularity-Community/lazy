@@ -10,6 +10,7 @@ use crate::ui::component::context_menu_overlay::ContextMenuOverlay;
 
 pub struct ContextMenu<'a, Message> {
     content: Element<'a, Message>,
+    menu: Element<'a, Message>,
     position: Option<Point>,
     on_open: Box<dyn Fn(Point) -> Message + 'a>,
     on_close: Message,
@@ -18,12 +19,14 @@ pub struct ContextMenu<'a, Message> {
 impl<'a, Message> ContextMenu<'a, Message> {
     pub fn new(
         content: impl Into<Element<'a, Message>>,
+        menu: impl Into<Element<'a, Message>>,
         position: Option<Point>,
         on_open: impl Fn(Point) -> Message + 'a,
         on_close: Message,
     ) -> Self {
         Self {
             content: content.into(),
+            menu: menu.into(),
             position,
             on_open: Box::new(on_open),
             on_close,
@@ -37,11 +40,11 @@ impl<Message: Clone> Widget<Message, iced::Theme, iced::Renderer> for ContextMen
     }
 
     fn children(&self) -> Vec<Tree> {
-        vec![Tree::new(&self.content)]
+        vec![Tree::new(&self.content), Tree::new(&self.menu)]
     }
 
     fn diff(&self, tree: &mut Tree) {
-        tree.diff_children(&[&self.content]);
+        tree.diff_children(&[&self.content, &self.menu]);
     }
 
     fn layout(
@@ -90,19 +93,6 @@ impl<Message: Clone> Widget<Message, iced::Theme, iced::Renderer> for ContextMen
         shell: &mut Shell<'_, Message>,
         viewport: &Rectangle,
     ) {
-        if matches!(
-            event,
-            Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Right))
-        ) {
-            if let Some(position) = cursor.position() {
-                if layout.bounds().contains(position) {
-                    shell.publish((self.on_open)(position));
-                    shell.capture_event();
-                    return;
-                }
-            }
-        }
-
         self.content.as_widget_mut().update(
             &mut tree.children[0],
             event,
@@ -113,6 +103,18 @@ impl<Message: Clone> Widget<Message, iced::Theme, iced::Renderer> for ContextMen
             shell,
             viewport,
         );
+
+        if shell.is_event_captured() {
+            return;
+        }
+
+        if let Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Right)) = event
+            && let Some(position) = cursor.position()
+            && layout.bounds().contains(position)
+        {
+            shell.publish((self.on_open)(position));
+            shell.capture_event();
+        }
     }
 
     fn mouse_interaction(
@@ -142,6 +144,8 @@ impl<Message: Clone> Widget<Message, iced::Theme, iced::Renderer> for ContextMen
     ) -> Option<overlay::Element<'b, Message, iced::Theme, iced::Renderer>> {
         if let Some(position) = self.position {
             return Some(overlay::Element::new(Box::new(ContextMenuOverlay {
+                content: &mut self.menu,
+                tree: &mut tree.children[1],
                 position,
                 on_close: self.on_close.clone(),
             })));

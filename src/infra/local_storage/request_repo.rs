@@ -1,17 +1,15 @@
 use async_trait::async_trait;
-use sqlx::Row;
 
 use crate::{
-    domain::request_model::RequestSavedModel, enums::auth_config::AuthConfig,
-    infra::local_storage::sqlite_repo::SqliteRepository,
+    domain::request_model::RequestSavedModel, infra::local_storage::sqlite_repo::SqliteRepository,
 };
 
 #[async_trait]
 pub trait RequestSavedRepository {
     async fn save_request(&self, req: &RequestSavedModel) -> Result<i64, String>;
     async fn update_request(&self, req: &RequestSavedModel) -> Result<(), String>;
-    async fn delete_request(&self, id: i64) -> Result<(), String>;
-    async fn fetch_request_by_id(&self, id: i64) -> Result<RequestSavedModel, String>;
+    // async fn delete_request(&self, id: i64) -> Result<(), String>;
+    // async fn fetch_request_by_id(&self, id: i64) -> Result<RequestSavedModel, String>;
 }
 
 #[async_trait]
@@ -75,37 +73,37 @@ impl RequestSavedRepository for SqliteRepository {
         Ok(())
     }
 
-    async fn delete_request(&self, id: i64) -> Result<(), String> {
-        sqlx::query("DELETE FROM requests WHERE id = ?")
-            .bind(id)
-            .execute(&self.pool)
-            .await
-            .map_err(|e| e.to_string())?;
-        Ok(())
-    }
-
-    async fn fetch_request_by_id(&self, id: i64) -> Result<RequestSavedModel, String> {
-        let row = sqlx::query("SELECT * FROM requests WHERE id = ?")
-            .bind(id)
-            .fetch_one(&self.pool)
-            .await
-            .map_err(|e| e.to_string())?;
-
-        let headers_raw: String = row.get("headers");
-        let params_raw: String = row.get("params");
-        let auth_raw: String = row.get("auth");
-
-        Ok(RequestSavedModel {
-            id: Some(row.get("id")),
-            folder_id: row.get("folder_id"),
-            name: row.get("name"),
-            method: row.get("method"),
-            url: row.get("url"),
-            headers: serde_json::from_str(&headers_raw).unwrap_or_default(),
-            params: serde_json::from_str(&params_raw).unwrap_or_default(),
-            auth: serde_json::from_str(&auth_raw).unwrap_or(AuthConfig::None),
-            body: row.get("body"),
-            response: row.get("response"),
-        })
-    }
+    // async fn delete_request(&self, id: i64) -> Result<(), String> {
+    //     sqlx::query("DELETE FROM requests WHERE id = ?")
+    //         .bind(id)
+    //         .execute(&self.pool)
+    //         .await
+    //         .map_err(|e| e.to_string())?;
+    //     Ok(())
+    // }
+    //
+    // async fn fetch_request_by_id(&self, id: i64) -> Result<RequestSavedModel, String> {
+    //     let row = sqlx::query("SELECT * FROM requests WHERE id = ?")
+    //         .bind(id)
+    //         .fetch_one(&self.pool)
+    //         .await
+    //         .map_err(|e| e.to_string())?;
+    //
+    //     let headers_raw: String = row.get("headers");
+    //     let params_raw: String = row.get("params");
+    //     let auth_raw: String = row.get("auth");
+    //
+    //     Ok(RequestSavedModel {
+    //         id: Some(row.get("id")),
+    //         folder_id: row.get("folder_id"),
+    //         name: row.get("name"),
+    //         method: row.get("method"),
+    //         url: row.get("url"),
+    //         headers: serde_json::from_str(&headers_raw).unwrap_or_default(),
+    //         params: serde_json::from_str(&params_raw).unwrap_or_default(),
+    //         auth: serde_json::from_str(&auth_raw).unwrap_or(AuthConfig::None),
+    //         body: row.get("body"),
+    //         response: row.get("response"),
+    //     })
+    // }
 }

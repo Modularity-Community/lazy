@@ -30,4 +30,9 @@ pub mod colors {
     // pub const TEXT_PRIMARY: Color = Color::WHITE;
     // pub const TEXT_MUTED: Color = Color::from_rgb(0.7, 0.7, 0.7);
     pub const HOVERED: Color = color!(0x9AF0F0);
+
+    pub const MENU_BG: Color = Color::from_rgb8(38, 39, 54);
+    pub const MENU_HOVER: Color = Color::from_rgb8(60, 55, 80);
+    pub const MENU_BORDER: Color = Color::from_rgb8(85, 77, 108);
+    pub const MENU_TEXT: Color = Color::from_rgb8(235, 231, 246);
 }

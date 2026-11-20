@@ -87,7 +87,7 @@ impl AppState {
             AppMessage::DatabaseReady(Ok(repo)) => {
                 tracing::info!("database ready");
                 self.repo = Some(repo.clone());
-                Task::done(AppMessage::Sidebar(SidebarEvent::WorkspaceLoaded))
+                Task::done(AppMessage::Sidebar(SidebarEvent::ReloadWorkspace))
             }
             AppMessage::DatabaseReady(Err(err)) => {
                 tracing::error!("failed to initialize db: {err}");
