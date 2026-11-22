@@ -8,7 +8,7 @@ use crate::{
 pub trait RequestSavedRepository {
     async fn save_request(&self, req: &RequestSavedModel) -> Result<i64, String>;
     async fn update_request(&self, req: &RequestSavedModel) -> Result<(), String>;
-    // async fn delete_request(&self, id: i64) -> Result<(), String>;
+    async fn delete_request(&self, id: Option<i64>) -> Result<(), String>;
     // async fn fetch_request_by_id(&self, id: i64) -> Result<RequestSavedModel, String>;
 }
 
@@ -73,14 +73,14 @@ impl RequestSavedRepository for SqliteRepository {
         Ok(())
     }
 
-    // async fn delete_request(&self, id: i64) -> Result<(), String> {
-    //     sqlx::query("DELETE FROM requests WHERE id = ?")
-    //         .bind(id)
-    //         .execute(&self.pool)
-    //         .await
-    //         .map_err(|e| e.to_string())?;
-    //     Ok(())
-    // }
+    async fn delete_request(&self, id: Option<i64>) -> Result<(), String> {
+        sqlx::query("DELETE FROM requests WHERE id = ?")
+            .bind(id)
+            .execute(&self.pool)
+            .await
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
     //
     // async fn fetch_request_by_id(&self, id: i64) -> Result<RequestSavedModel, String> {
     //     let row = sqlx::query("SELECT * FROM requests WHERE id = ?")

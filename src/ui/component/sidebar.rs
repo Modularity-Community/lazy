@@ -14,7 +14,7 @@ use crate::{
         request_model::RequestSavedModel,
         workspace_tree::WorkspaceTree,
     },
-    enums::{context_menu_type::ContextMenuType, method::HttpMethod},
+    enums::method::HttpMethod,
     infra::local_storage::{
         folder_repo::FolderRepository, request_repo::RequestSavedRepository,
         sqlite_repo::SqliteRepository,
@@ -53,6 +53,7 @@ pub enum SidebarEvent {
     CreateRequest(RequestSavedModel),
     SaveCurrentRequest(RequestSavedModel),
     ReloadWorkspace,
+    DeleteRequest(Option<i64>),
 
     // Database results
     WorkspaceRender(Result<WorkspaceTree, String>),
@@ -134,8 +135,7 @@ impl SidebarState {
                     }
 
                     (ContextTarget::Request(id), ContextAction::Delete) => {
-                        tracing::info!("Delete request {id}");
-                        Task::none()
+                        self.update(SidebarEvent::DeleteRequest(Some(id)), repo)
                     }
 
                     _ => Task::none(),
@@ -152,6 +152,22 @@ impl SidebarState {
             }
             // SidebarEvent::SearchCollection(_val) => Task::none(),
             SidebarEvent::SelectRequest(_data) => Task::none(),
+            SidebarEvent::DeleteRequest(id) => {
+                let Some(repo) = repo.cloned() else {
+                    tracing::error!("Cannot delete request: repository unavailable");
+                    return Task::none();
+                };
+
+                Task::perform(
+                    async move {
+                        repo.delete_request(id)
+                            .await
+                            .map(|_| id.expect("id should be exist"))
+                            .map_err(|err| err.to_string())
+                    },
+                    SidebarEvent::RequestSaved,
+                )
+            }
             SidebarEvent::CreateFolder(id) => {
                 if let Some(repo) = repo {
                     let repo = repo.clone();
@@ -314,8 +330,6 @@ impl SidebarState {
             Space::new().width(indent),
             icon("fa-folder").size(13).color(VIOLET),
             text(&folder.name).size(13).color(TEXT),
-            horizontal(),
-            button(text("+").size(10)).padding([2, 5]),
         ]
         .spacing(6)
         .align_y(Alignment::Center);
