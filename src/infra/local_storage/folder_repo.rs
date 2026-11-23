@@ -15,29 +15,61 @@ use crate::{
 pub trait FolderRepository {
     async fn save_folder(&self, name: &str, parent_id: Option<i64>) -> Result<i64, String>;
     async fn delete_folder(&self, id: Option<i64>) -> Result<(), String>;
+    async fn rename_folder(&self, id: Option<i64>, name: &str) -> Result<(), sqlx::Error>;
 
     async fn fetch_workspace_tree(&self) -> Result<WorkspaceTree, String>;
 }
 
 #[async_trait]
 impl FolderRepository for SqliteRepository {
+    async fn rename_folder(&self, id: Option<i64>, name: &str) -> Result<(), sqlx::Error> {
+        let result = sqlx::query(
+            r#"
+            UPDATE folders
+            SET name = ?1
+            WHERE id = ?2
+            "#,
+        )
+        .bind(name)
+        .bind(id)
+        .execute(&self.pool)
+        .await?;
+
+        if result.rows_affected() == 0 {
+            tracing::error!("failed rename folder {:?}", result);
+            return Err(sqlx::Error::RowNotFound);
+        }
+
+        Ok(())
+    }
+
     async fn save_folder(&self, name: &str, parent_id: Option<i64>) -> Result<i64, String> {
         let result = sqlx::query("INSERT INTO folders (name, parent_id) VALUES (?, ?)")
             .bind(name)
             .bind(parent_id)
             .execute(&self.pool)
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| {
+                tracing::error!("failed save folder : {:?}", e);
+                e.to_string()
+            })?;
 
         Ok(result.last_insert_rowid())
     }
 
     async fn delete_folder(&self, id: Option<i64>) -> Result<(), String> {
-        sqlx::query("DELETE FROM folders WHERE id = ?")
-            .bind(id)
-            .execute(&self.pool)
-            .await
-            .map_err(|e| e.to_string())?;
+        sqlx::query(
+            r#"
+                DELETE FROM folders WHERE id = ?
+            "#,
+        )
+        .bind(id)
+        .execute(&self.pool)
+        .await
+        .map_err(|e| {
+            tracing::error!("failed delete folder : {:?}", e);
+            e.to_string()
+        })?;
         Ok(())
     }
 
@@ -45,12 +77,18 @@ impl FolderRepository for SqliteRepository {
         let folder_rows = sqlx::query("SELECT id, parent_id, name FROM folders")
             .fetch_all(&self.pool)
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| {
+                tracing::error!("failed get folder row : {:?}", e);
+                e.to_string()
+            })?;
 
         let request_rows = sqlx::query("SELECT * FROM requests")
             .fetch_all(&self.pool)
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| {
+                tracing::error!("failed get request row : {:?}", e);
+                e.to_string()
+            })?;
 
         let mut requests_by_folder: HashMap<Option<i64>, Vec<RequestSavedModel>> = HashMap::new();
         for row in request_rows {
