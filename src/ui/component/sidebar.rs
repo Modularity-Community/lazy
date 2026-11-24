@@ -50,6 +50,8 @@ pub struct SidebarState {
     pub root_requests: Vec<RequestSavedModel>,
 
     pub active_request_id: Option<i64>,
+    // incremented when selecting a different request, so async saves cannot hijack selection
+    pub selection_revision: u64,
     pub current_folder_id: Option<i64>,
 
     pub context_menu: Option<ContextMenuData>,
@@ -58,6 +60,7 @@ pub struct SidebarState {
     pub search_query: String,
     pub search_results: Vec<crate::infra::local_storage::request_repo::RequestSearchResult>,
     pub search_revision: u64,
+    pub search_pending: bool,
     pub status: Option<String>,
     pub rename_saving: bool,
 }
@@ -69,7 +72,15 @@ pub enum SidebarEvent {
     // Commands
     CreateFolder(Option<i64>),
     CreateRequest(RequestSavedModel),
-    SaveCurrentRequest(RequestSavedModel),
+    SaveCurrentRequest {
+        request: RequestSavedModel,
+        origin_revision: u64,
+    },
+    CurrentRequestSaved {
+        origin_revision: u64,
+        expected_id: Option<i64>,
+        result: Result<i64, String>,
+    },
     ReloadWorkspace,
     DeleteRequest(Option<i64>),
     DeleteFolder(Option<i64>),
@@ -77,6 +88,7 @@ pub enum SidebarEvent {
     // Database results
     WorkspaceRender(Result<WorkspaceTree, String>),
     RequestSaved(Result<i64, String>),
+    RequestCreated(Result<i64, String>),
 
     // Context menu
     OpenContextMenu(ContextTarget, Point),
@@ -105,12 +117,14 @@ impl SidebarState {
             folders: Vec::new(),
             root_requests: Vec::new(),
             active_request_id: None,
+            selection_revision: 0,
             current_folder_id: None,
             context_menu: None,
             renaming: None,
             search_query: String::new(),
             search_results: Vec::new(),
             search_revision: 0,
+            search_pending: false,
             status: None,
             rename_saving: false,
         }
@@ -202,7 +216,9 @@ impl SidebarState {
                 self.context_menu = None;
                 Task::none()
             }
-            SidebarEvent::SelectRequest(_data) => Task::none(),
+            // AppState handles selection because the editor belongs to AppState
+            SidebarEvent::SelectRequest(_) => Task::none(),
+            SidebarEvent::CurrentRequestSaved { .. } => Task::none(),
             SidebarEvent::DeleteRequest(id) => {
                 let Some(repo) = repo.cloned() else {
                     tracing::error!("Cannot delete request: repository unavailable");
@@ -260,10 +276,14 @@ impl SidebarState {
                             .await
                             .map_err(|err| err.to_string())
                     },
-                    SidebarEvent::RequestSaved,
+                    SidebarEvent::RequestCreated,
                 )
             }
-            SidebarEvent::SaveCurrentRequest(request) => {
+            SidebarEvent::SaveCurrentRequest {
+                request,
+                origin_revision,
+            } => {
+                let expected_id = request.id;
                 let Some(repo) = repo.cloned() else {
                     tracing::error!("Cannot save request: repository unavailable");
                     return Task::none();
@@ -290,7 +310,11 @@ impl SidebarState {
 
                         result.map_err(|err| err.to_string())
                     },
-                    SidebarEvent::RequestSaved,
+                    move |result| SidebarEvent::CurrentRequestSaved {
+                        origin_revision,
+                        expected_id,
+                        result,
+                    },
                 )
             }
             SidebarEvent::WorkspaceRender(result) => {
@@ -304,6 +328,16 @@ impl SidebarState {
                 Task::none()
             }
 
+            SidebarEvent::RequestCreated(result) => match result {
+                Ok(id) => Task::batch([
+                    Self::reload_workspace(repo),
+                    self.update(SidebarEvent::SearchSelect(id), repo),
+                ]),
+                Err(err) => {
+                    self.status = Some(format!("Create failed: {err}"));
+                    Task::none()
+                }
+            },
             SidebarEvent::RequestSaved(result) => match result {
                 Ok(id) => {
                     tracing::debug!("Request saved successfully: {id}");
@@ -410,8 +444,9 @@ impl SidebarState {
             SidebarEvent::SearchChanged(value) => {
                 self.search_query = value;
                 self.search_revision = self.search_revision.wrapping_add(1);
-                if self.search_query.trim().is_empty() {
-                    self.search_results.clear();
+                self.search_results.clear();
+                self.search_pending = !self.search_query.trim().is_empty();
+                if !self.search_pending {
                     return Task::none();
                 }
                 let revision = self.search_revision;
@@ -438,6 +473,7 @@ impl SidebarState {
             }
             SidebarEvent::SearchFinished(revision, result) => {
                 if revision == self.search_revision {
+                    self.search_pending = false;
                     match result {
                         Ok(items) => self.search_results = items,
                         Err(err) => self.status = Some(format!("Search failed: {err}")),
@@ -461,16 +497,8 @@ impl SidebarState {
                     Task::none()
                 }
             },
-            SidebarEvent::GenerateCurlReady(result) => match result {
-                Ok(command) => {
-                    self.status = Some("cURL copied to clipboard".to_owned());
-                    iced::clipboard::write(command)
-                }
-                Err(err) => {
-                    self.status = Some(format!("cURL failed: {err}"));
-                    Task::none()
-                }
-            },
+            // AppState opens the app-level cURL preview / error toast.
+            SidebarEvent::GenerateCurlReady(_) => Task::none(),
         }
     }
 
@@ -493,11 +521,12 @@ impl SidebarState {
                     text_color: VIOLET,
                     ..Default::default()
                 })
+                .on_press(SidebarEvent::CreateFolder(None))
                 .padding([3, 10]),
         ]
         .align_y(Alignment::Center);
 
-        let search_bar = text_input("Search collections...", &self.search_query)
+        let search_bar = text_input("Search requests by name or URL...", &self.search_query)
             .on_input(SidebarEvent::SearchChanged)
             .padding([9, 10])
             .size(12)
@@ -515,32 +544,62 @@ impl SidebarState {
             }
         } else {
             for item in &self.search_results {
-                let label = format!("{}  {}", item.method, item.name);
+                let method = item.method.parse().unwrap_or(HttpMethod::Get);
+                let content = row![
+                    text(&item.method).size(10).color(get_method_color(&method)),
+                    column![
+                        text(&item.name).size(12).color(TEXT),
+                        text(&item.url).size(10).color(MUTED),
+                    ]
+                    .spacing(3)
+                    .width(Length::Fill),
+                ]
+                .spacing(9)
+                .align_y(Alignment::Center);
                 workspace_tree = workspace_tree.push(
-                    button(text(label).size(12))
+                    button(content)
                         .on_press(SidebarEvent::SearchSelect(item.id))
-                        .width(Length::Fill),
+                        .width(Length::Fill)
+                        .padding([8, 6])
+                        .style(|_, status| button::Style {
+                            background: matches!(
+                                status,
+                                button::Status::Hovered | button::Status::Pressed
+                            )
+                            .then_some(BTN_BG.into()),
+                            text_color: TEXT,
+                            border: iced::Border {
+                                radius: 6.0.into(),
+                                ..Default::default()
+                            },
+                            ..Default::default()
+                        }),
                 );
             }
-            if self.search_results.is_empty() {
+            if self.search_pending {
+                workspace_tree =
+                    workspace_tree.push(text("Searching SQLite…").size(11).color(MUTED));
+            } else if self.search_results.is_empty() {
                 workspace_tree =
                     workspace_tree.push(text("No matching requests").size(11).color(MUTED));
             }
         }
-        let mut contents = column![header, search_bar, Space::new().height(5), workspace_tree];
+        let list = iced::widget::scrollable(workspace_tree)
+            .height(Length::Fill)
+            .width(Length::Fill);
+        let mut contents = column![header, search_bar, list];
         if let Some(status) = &self.status {
             contents = contents.push(text(status).size(10).color(MUTED));
         }
         let sidebar_content = container(
             contents
                 .spacing(14)
-                .padding(16)
+                .padding([18, 10])
                 .width(Length::Fill)
                 .height(Length::Fill),
         )
-        .width(Length::Fixed(232.0))
+        .width(Length::Fill)
         .height(Length::Fill)
-        .padding(15)
         .style(|_| container::Style {
             background: Some(BG.into()),
             border: iced::Border {
@@ -639,8 +698,11 @@ impl SidebarState {
         let editing = req
             .id
             .is_some_and(|id| self.is_renaming(ContextTarget::Request(id)));
+        // One mouse_area owns BOTH callbacks. A nested on_double_click mouse_area
+        // captures the left press before an outer on_press can select the request.
         let item_content: Element<'_, SidebarEvent> = match req.id {
             Some(id) if !editing => mouse_area(item_content)
+                .on_press(SidebarEvent::SelectRequest(req.clone()))
                 .on_double_click(SidebarEvent::BeginRename(ContextTarget::Request(id)))
                 .into(),
             _ => item_content.into(),
@@ -651,14 +713,20 @@ impl SidebarState {
             active_menu,
         );
 
-        let content: Element<'_, SidebarEvent> = if editing {
-            request_content
-        } else {
-            mouse_area(request_content)
-                .on_press(SidebarEvent::SelectRequest(req.clone()))
-                .into()
-        };
-        container(content).width(Length::Fill).padding(5.0).into()
+        let selected = req.id.is_some() && req.id == self.active_request_id;
+        container(request_content)
+            .width(Length::Fill)
+            .padding([7, 8])
+            .style(move |_| container::Style {
+                background: selected.then_some(BTN_BG.into()),
+                border: iced::Border {
+                    color: if selected { VIOLET } else { BG },
+                    width: if selected { 1.0 } else { 0.0 },
+                    radius: 7.0.into(),
+                },
+                ..Default::default()
+            })
+            .into()
     }
 
     fn context_menu(target: ContextTarget) -> Element<'static, SidebarEvent> {

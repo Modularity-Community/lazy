@@ -76,7 +76,7 @@ impl RequestSavedRepository for SqliteRepository {
         let params_json = serde_json::to_string(&req.params).map_err(|e| e.to_string())?;
         let auth_json = serde_json::to_string(&req.auth).map_err(|e| e.to_string())?;
 
-        sqlx::query(
+        let result = sqlx::query(
             r#"
             UPDATE requests 
             SET folder_id = ?, name = ?, method = ?, url = ?, headers = ?, params = ?, auth = ?, body = ?, updated_at = CURRENT_TIMESTAMP, response = ?
@@ -100,6 +100,9 @@ impl RequestSavedRepository for SqliteRepository {
                 e.to_string()
             })?;
 
+        if result.rows_affected() == 0 {
+            return Err(format!("Request {id} no longer exists"));
+        }
         tracing::debug!("success update request: {:?}", id);
 
         Ok(())

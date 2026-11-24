@@ -10,3 +10,5 @@ pub mod response;
 pub mod sidebar;
 
 pub mod rename_field;
+
+pub mod app_overlay;

@@ -1,6 +1,6 @@
 //! Text input boundary: commits on an outside mouse press, cancels on Escape.
 use iced::{Element, Event, Length, Rectangle, Size, Vector, keyboard, mouse};
-use iced::advanced::{Clipboard, Layout, Shell, Widget, layout, mouse::Cursor, overlay, renderer, widget::Tree};
+use iced::advanced::{Clipboard, Layout, Shell, Widget, layout, mouse::Cursor, overlay, renderer, widget::{Operation, Tree}};
 
 pub struct RenameField<'a, Message> {
     content: Element<'a, Message>,
@@ -22,6 +22,17 @@ impl<Message: Clone> Widget<Message, iced::Theme, iced::Renderer> for RenameFiel
         let child = self.content.as_widget_mut().layout(&mut tree.children[0], renderer, limits);
         layout::Node::with_children(child.size(), vec![child])
     }
+    fn operate(
+        &mut self, tree: &mut Tree, layout: Layout<'_>, renderer: &iced::Renderer,
+        operation: &mut dyn Operation,
+    ) {
+        operation.traverse(&mut |operation| {
+            self.content.as_widget_mut().operate(
+                &mut tree.children[0], layout.child(0), renderer, operation,
+            );
+        });
+    }
+
     fn draw(&self, tree: &Tree, renderer: &mut iced::Renderer, theme: &iced::Theme, style: &renderer::Style, layout: Layout<'_>, cursor: Cursor, viewport: &Rectangle) {
         self.content.as_widget().draw(&tree.children[0], renderer, theme, style, layout.child(0), cursor, viewport);
     }

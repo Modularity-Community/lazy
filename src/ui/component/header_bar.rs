@@ -14,6 +14,7 @@ pub struct HeaderBarState {
     pub url: String,
     pub method: HttpMethod,
     pub is_sending: bool,
+    pub is_saving: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -30,6 +31,7 @@ impl HeaderBarState {
             url: String::from("https://jsonplaceholder.typicode.com/posts"),
             method: HttpMethod::Get,
             is_sending: false,
+            is_saving: false,
         }
     }
 
@@ -80,13 +82,15 @@ impl HeaderBarState {
             .width(Length::Fill)
             .search_style();
 
-        let send_label = if self.is_sending {
+        let send_label = if self.is_saving {
+            "Saving…"
+        } else if self.is_sending {
             "Sending…"
         } else {
             "Send"
         };
         let send_btn = button(text(send_label).size(13).color(BG))
-            .on_press_maybe((!self.is_sending).then_some(HeaderBarEvent::SendReqeust))
+            .on_press_maybe((!self.is_sending && !self.is_saving).then_some(HeaderBarEvent::SendReqeust))
             .padding([11, 18])
             .btn_execute_style();
 
