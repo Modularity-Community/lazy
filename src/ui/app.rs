@@ -263,25 +263,31 @@ impl AppState {
                 .height(Length::Fill)
                 .into()
             } else {
-                let sidebar = self.sidebar.view().map(AppMessage::Sidebar);
-                row![
-                    container(sidebar)
-                        .width(Length::Fixed(232.0))
+                let main_area = container(
+                    column![header, panels]
+                        .spacing(14)
+                        .width(Length::Fill)
                         .height(Length::Fill),
-                    container(
-                        column![header, panels]
-                            .spacing(14)
-                            .width(Length::Fill)
-                            .height(Length::Fill)
-                    )
-                    .padding(16)
-                    .width(Length::Fill)
-                    .height(Length::Fill),
-                ]
-                .spacing(0)
+                )
+                .padding(16)
                 .width(Length::Fill)
-                .height(Length::Fill)
-                .into()
+                .height(Length::Fill);
+
+                if self.navbar.show_workspace {
+                    let sidebar = self.sidebar.view().map(AppMessage::Sidebar);
+                    row![
+                        container(sidebar)
+                            .width(Length::Fixed(232.0))
+                            .height(Length::Fill),
+                        main_area,
+                    ]
+                    .spacing(0)
+                    .width(Length::Fill)
+                    .height(Length::Fill)
+                    .into()
+                } else {
+                    main_area.into()
+                }
             };
 
             container(
