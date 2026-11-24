@@ -7,17 +7,26 @@ use crate::ui::{
     style::button::LazyButton,
     theme::colors::{BORDER, SURFACE, TEXT, VIOLET},
 };
-pub struct NavbarEvent {}
+pub struct NavbarEvent {
+    pub show_workspace: bool,
+}
 
 #[derive(Debug, Clone)]
-pub enum NavbarMessage {}
+pub enum NavbarMessage {
+    ToggleWorkspace,
+}
 
 impl NavbarEvent {
     pub fn new() -> Self {
-        Self {}
+        Self {
+            show_workspace: true,
+        }
     }
 
-    pub fn update(&mut self, _: NavbarMessage) -> Task<NavbarMessage> {
+    pub fn update(&mut self, message: NavbarMessage) -> Task<NavbarMessage> {
+        match message {
+            NavbarMessage::ToggleWorkspace => self.show_workspace = !self.show_workspace,
+        }
         Task::none()
     }
 
@@ -60,8 +69,18 @@ impl NavbarEvent {
             }
         };
 
+        let toggle_label = if self.show_workspace {
+            "Hide Workspace"
+        } else {
+            "Show Workspace"
+        };
+
+        let toggle = button(text(toggle_label).size(12))
+            .on_press(NavbarMessage::ToggleWorkspace)
+            .btn_style();
+
         container(
-            row![logo, horizontal(), nav_items]
+            row![logo, horizontal(), toggle, nav_items]
                 .spacing(12)
                 .align_y(Alignment::Center)
                 .padding([11, 18]),
