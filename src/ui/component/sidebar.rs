@@ -3,7 +3,8 @@ use std::sync::Arc;
 use iced::{
     Alignment, Background, Element, Length, Point, Task,
     widget::{
-        Space, button, column, container, mouse_area, row, space::horizontal, text, text_input,
+        self, Space, button, column, container, mouse_area, row, space::horizontal, text,
+        text_input,
     },
 };
 
@@ -14,27 +15,18 @@ use crate::{
         request_model::RequestSavedModel,
         workspace_tree::WorkspaceTree,
     },
-    enums::{context_menu_type::ContextMenuType, method::HttpMethod},
+    enums::method::HttpMethod,
     infra::local_storage::{
         folder_repo::FolderRepository, request_repo::RequestSavedRepository,
         sqlite_repo::SqliteRepository,
     },
     ui::{
-        component::context_menu_widget::ContextMenu,
+        component::{context_menu_widget::ContextMenu, rename_field::RenameField},
         icon::icon,
         style::{method_color::get_method_color, text_input::LazyTextInput},
         theme::colors::{BG, BORDER, BTN_BG, MUTED, TEXT, VIOLET},
     },
 };
-
-pub struct SidebarState {
-    pub folders: Vec<FolderModel>,
-    pub root_requests: Vec<RequestSavedModel>,
-
-    pub active_request_id: Option<i64>,
-    pub current_folder_id: Option<i64>,
-    pub context_menu: Option<ContextMenuData>,
-}
 
 #[derive(Debug, Clone, Copy)]
 pub enum ContextAction {
@@ -42,6 +34,35 @@ pub enum ContextAction {
     CreateFolder,
     Duplicate,
     Delete,
+    Rename,
+    GenerateCurl,
+}
+
+#[derive(Debug, Clone)]
+pub struct RenameState {
+    pub target: ContextTarget,
+    pub original_name: String,
+    pub draft: String,
+}
+
+pub struct SidebarState {
+    pub folders: Vec<FolderModel>,
+    pub root_requests: Vec<RequestSavedModel>,
+
+    pub active_request_id: Option<i64>,
+    // incremented when selecting a different request, so async saves cannot hijack selection
+    pub selection_revision: u64,
+    pub current_folder_id: Option<i64>,
+
+    pub context_menu: Option<ContextMenuData>,
+
+    pub renaming: Option<RenameState>,
+    pub search_query: String,
+    pub search_results: Vec<crate::infra::local_storage::request_repo::RequestSearchResult>,
+    pub search_revision: u64,
+    pub search_pending: bool,
+    pub status: Option<String>,
+    pub rename_saving: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -51,17 +72,43 @@ pub enum SidebarEvent {
     // Commands
     CreateFolder(Option<i64>),
     CreateRequest(RequestSavedModel),
-    SaveCurrentRequest(RequestSavedModel),
+    SaveCurrentRequest {
+        request: RequestSavedModel,
+        origin_revision: u64,
+    },
+    CurrentRequestSaved {
+        origin_revision: u64,
+        expected_id: Option<i64>,
+        result: Result<i64, String>,
+    },
     ReloadWorkspace,
+    DeleteRequest(Option<i64>),
+    DeleteFolder(Option<i64>),
 
     // Database results
     WorkspaceRender(Result<WorkspaceTree, String>),
     RequestSaved(Result<i64, String>),
+    RequestCreated(Result<i64, String>),
 
     // Context menu
     OpenContextMenu(ContextTarget, Point),
     CloseContextMenu,
     ContextAction(ContextTarget, ContextAction),
+
+    BeginRename(ContextTarget),
+    RenameChanged(String),
+    CommitRename,
+    CancelRename,
+    RenameFinished(Result<(), String>),
+    SearchChanged(String),
+    SearchDebounced(u64),
+    SearchFinished(
+        u64,
+        Result<Vec<crate::infra::local_storage::request_repo::RequestSearchResult>, String>,
+    ),
+    SearchSelect(i64),
+    RequestLoaded(Result<RequestSavedModel, String>),
+    GenerateCurlReady(Result<String, String>),
 }
 
 impl SidebarState {
@@ -70,8 +117,16 @@ impl SidebarState {
             folders: Vec::new(),
             root_requests: Vec::new(),
             active_request_id: None,
+            selection_revision: 0,
             current_folder_id: None,
             context_menu: None,
+            renaming: None,
+            search_query: String::new(),
+            search_results: Vec::new(),
+            search_revision: 0,
+            search_pending: false,
+            status: None,
+            rename_saving: false,
         }
     }
     fn new_request(folder_id: Option<i64>) -> RequestSavedModel {
@@ -87,18 +142,6 @@ impl SidebarState {
             body: String::new(),
             response: None,
         }
-    }
-
-    fn reload_workspace(repo: Option<&Arc<SqliteRepository>>) -> Task<SidebarEvent> {
-        let Some(repo) = repo.cloned() else {
-            tracing::warn!("Repository is not ready");
-            return Task::none();
-        };
-
-        Task::perform(
-            async move { repo.fetch_workspace_tree().await },
-            SidebarEvent::WorkspaceRender,
-        )
     }
 
     pub fn update(
@@ -134,10 +177,33 @@ impl SidebarState {
                     }
 
                     (ContextTarget::Request(id), ContextAction::Delete) => {
-                        tracing::info!("Delete request {id}");
-                        Task::none()
+                        self.update(SidebarEvent::DeleteRequest(Some(id)), repo)
                     }
 
+                    (ContextTarget::Folder(id), ContextAction::Delete) => {
+                        self.update(SidebarEvent::DeleteFolder(Some(id)), repo)
+                    }
+
+                    (ContextTarget::Folder(id), ContextAction::Rename) => {
+                        self.update(SidebarEvent::BeginRename(ContextTarget::Folder(id)), repo)
+                    }
+
+                    (ContextTarget::Request(id), ContextAction::Rename) => {
+                        self.update(SidebarEvent::BeginRename(ContextTarget::Request(id)), repo)
+                    }
+
+                    (ContextTarget::Request(id), ContextAction::GenerateCurl) => {
+                        let Some(repo) = repo.cloned() else {
+                            return Task::none();
+                        };
+                        Task::perform(
+                            async move {
+                                let request = repo.fetch_request_by_id(id).await?;
+                                Ok(crate::utils::curl::generate_curl_for_request(&request))
+                            },
+                            SidebarEvent::GenerateCurlReady,
+                        )
+                    }
                     _ => Task::none(),
                 }
             }
@@ -150,8 +216,40 @@ impl SidebarState {
                 self.context_menu = None;
                 Task::none()
             }
-            // SidebarEvent::SearchCollection(_val) => Task::none(),
-            SidebarEvent::SelectRequest(_data) => Task::none(),
+            // AppState handles selection because the editor belongs to AppState
+            SidebarEvent::SelectRequest(_) => Task::none(),
+            SidebarEvent::CurrentRequestSaved { .. } => Task::none(),
+            SidebarEvent::DeleteRequest(id) => {
+                let Some(repo) = repo.cloned() else {
+                    tracing::error!("Cannot delete request: repository unavailable");
+                    return Task::none();
+                };
+
+                Task::perform(
+                    async move {
+                        repo.delete_request(id)
+                            .await
+                            .map(|_| id.expect("id should be exist"))
+                            .map_err(|err| err.to_string())
+                    },
+                    SidebarEvent::RequestSaved,
+                )
+            }
+            SidebarEvent::DeleteFolder(id) => {
+                let Some(repo) = repo.cloned() else {
+                    tracing::error!("Cannot delete request: repository unavailable");
+                    return Task::none();
+                };
+                Task::perform(
+                    async move {
+                        repo.delete_folder(id)
+                            .await
+                            .map(|_| id.expect("id should be exist"))
+                            .map_err(|err| err.to_string())
+                    },
+                    SidebarEvent::RequestSaved,
+                )
+            }
             SidebarEvent::CreateFolder(id) => {
                 if let Some(repo) = repo {
                     let repo = repo.clone();
@@ -178,10 +276,14 @@ impl SidebarState {
                             .await
                             .map_err(|err| err.to_string())
                     },
-                    SidebarEvent::RequestSaved,
+                    SidebarEvent::RequestCreated,
                 )
             }
-            SidebarEvent::SaveCurrentRequest(request) => {
+            SidebarEvent::SaveCurrentRequest {
+                request,
+                origin_revision,
+            } => {
+                let expected_id = request.id;
                 let Some(repo) = repo.cloned() else {
                     tracing::error!("Cannot save request: repository unavailable");
                     return Task::none();
@@ -189,17 +291,30 @@ impl SidebarState {
 
                 Task::perform(
                     async move {
-                        let result = if request.id.is_some() {
-                            repo.update_request(&request)
-                                .await
-                                .map(|_| request.id.expect("ID checked above"))
+                        let result = if let Some(id) = request.id {
+                            // Keep stored metadata, which is not represented in the editor yet.
+                            // In particular, do not overwrite a renamed item with "New Request".
+                            match repo.fetch_request_by_id(id).await {
+                                Ok(mut existing) => {
+                                    existing.method = request.method;
+                                    existing.url = request.url;
+                                    existing.body = request.body;
+                                    existing.response = request.response;
+                                    repo.update_request(&existing).await.map(|_| id)
+                                }
+                                Err(err) => Err(err),
+                            }
                         } else {
                             repo.save_request(&request).await
                         };
 
                         result.map_err(|err| err.to_string())
                     },
-                    SidebarEvent::RequestSaved,
+                    move |result| SidebarEvent::CurrentRequestSaved {
+                        origin_revision,
+                        expected_id,
+                        result,
+                    },
                 )
             }
             SidebarEvent::WorkspaceRender(result) => {
@@ -213,6 +328,16 @@ impl SidebarState {
                 Task::none()
             }
 
+            SidebarEvent::RequestCreated(result) => match result {
+                Ok(id) => Task::batch([
+                    Self::reload_workspace(repo),
+                    self.update(SidebarEvent::SearchSelect(id), repo),
+                ]),
+                Err(err) => {
+                    self.status = Some(format!("Create failed: {err}"));
+                    Task::none()
+                }
+            },
             SidebarEvent::RequestSaved(result) => match result {
                 Ok(id) => {
                     tracing::debug!("Request saved successfully: {id}");
@@ -224,8 +349,156 @@ impl SidebarState {
                     Task::none()
                 }
             },
-
             SidebarEvent::ReloadWorkspace => Self::reload_workspace(repo),
+            SidebarEvent::BeginRename(target) => {
+                let Some(name) = self.target_name(target) else {
+                    return Task::none();
+                };
+
+                if self.rename_saving {
+                    return Task::none();
+                }
+                self.renaming = Some(RenameState {
+                    target,
+                    original_name: name.to_owned(),
+                    draft: name.to_owned(),
+                });
+
+                self.context_menu = None;
+                let id = widget::Id::new("sidebar-rename");
+                Task::batch([
+                    iced::widget::operation::focus(id.clone()),
+                    iced::widget::operation::select_all(id),
+                ])
+            }
+            SidebarEvent::RenameChanged(value) => {
+                if let Some(state) = &mut self.renaming {
+                    state.draft = value;
+                }
+
+                Task::none()
+            }
+            SidebarEvent::CancelRename => {
+                if !self.rename_saving {
+                    self.renaming = None;
+                }
+                Task::none()
+            }
+            SidebarEvent::CommitRename => {
+                if self.rename_saving {
+                    return Task::none();
+                }
+                let Some(state) = self.renaming.clone() else {
+                    return Task::none();
+                };
+
+                let name = state.draft.trim().to_owned();
+                if name.is_empty() {
+                    self.status = Some("Name cannot be empty".to_owned());
+                    return Task::none();
+                }
+
+                if name == state.original_name {
+                    self.renaming = None;
+                    return Task::none();
+                }
+
+                let Some(repo) = repo.cloned() else {
+                    return Task::none();
+                };
+
+                self.rename_saving = true;
+                Task::perform(
+                    async move {
+                        match state.target {
+                            ContextTarget::Folder(id) => repo
+                                .rename_folder(Some(id), &name)
+                                .await
+                                .map_err(|err| err.to_string()),
+
+                            ContextTarget::Request(id) => repo
+                                .rename_request(Some(id), &name)
+                                .await
+                                .map_err(|err| err.to_string()),
+
+                            ContextTarget::Workspace => Ok(()),
+                        }
+                    },
+                    SidebarEvent::RenameFinished,
+                )
+            }
+            SidebarEvent::RenameFinished(result) => {
+                self.rename_saving = false;
+                match result {
+                    Ok(()) => {
+                        self.renaming = None;
+                        Self::reload_workspace(repo)
+                    }
+                    Err(err) => {
+                        self.status = Some(format!("Rename failed: {err}"));
+                        tracing::error!("Rename failed: {err}");
+                        Task::none()
+                    }
+                }
+            }
+            SidebarEvent::SearchChanged(value) => {
+                self.search_query = value;
+                self.search_revision = self.search_revision.wrapping_add(1);
+                self.search_results.clear();
+                self.search_pending = !self.search_query.trim().is_empty();
+                if !self.search_pending {
+                    return Task::none();
+                }
+                let revision = self.search_revision;
+                Task::perform(
+                    async move {
+                        tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+                        revision
+                    },
+                    SidebarEvent::SearchDebounced,
+                )
+            }
+            SidebarEvent::SearchDebounced(revision) => {
+                if revision != self.search_revision {
+                    return Task::none();
+                }
+                let Some(repo) = repo.cloned() else {
+                    return Task::none();
+                };
+                let query = self.search_query.trim().to_owned();
+                Task::perform(
+                    async move { (revision, repo.search_requests(&query).await) },
+                    |(revision, result)| SidebarEvent::SearchFinished(revision, result),
+                )
+            }
+            SidebarEvent::SearchFinished(revision, result) => {
+                if revision == self.search_revision {
+                    self.search_pending = false;
+                    match result {
+                        Ok(items) => self.search_results = items,
+                        Err(err) => self.status = Some(format!("Search failed: {err}")),
+                    }
+                }
+                Task::none()
+            }
+            SidebarEvent::SearchSelect(id) => {
+                let Some(repo) = repo.cloned() else {
+                    return Task::none();
+                };
+                Task::perform(
+                    async move { repo.fetch_request_by_id(id).await },
+                    SidebarEvent::RequestLoaded,
+                )
+            }
+            SidebarEvent::RequestLoaded(result) => match result {
+                Ok(req) => Task::done(SidebarEvent::SelectRequest(req)),
+                Err(err) => {
+                    self.status = Some(err);
+                    Task::none()
+                }
+            },
+            // AppState opens the app-level cURL preview / error toast.
+            SidebarEvent::GenerateCurlReady(_) => Task::none(),
         }
     }
 
@@ -248,35 +521,85 @@ impl SidebarState {
                     text_color: VIOLET,
                     ..Default::default()
                 })
+                .on_press(SidebarEvent::CreateFolder(None))
                 .padding([3, 10]),
         ]
         .align_y(Alignment::Center);
 
-        let search_bar = text_input("Search collections...", "")
+        let search_bar = text_input("Search requests by name or URL...", &self.search_query)
+            .on_input(SidebarEvent::SearchChanged)
             .padding([9, 10])
             .size(12)
             .search_style();
 
         let mut workspace_tree = column![].spacing(6);
-        for folder in &self.folders {
-            workspace_tree = workspace_tree.push(Self::render_folder(folder, 0, self.context_menu));
+        if self.search_query.trim().is_empty() {
+            for folder in &self.folders {
+                workspace_tree =
+                    workspace_tree.push(self.render_folder(folder, 0, self.context_menu));
+            }
+            for req in &self.root_requests {
+                workspace_tree =
+                    workspace_tree.push(self.render_request_item(req, 0, self.context_menu));
+            }
+        } else {
+            for item in &self.search_results {
+                let method = item.method.parse().unwrap_or(HttpMethod::Get);
+                let content = row![
+                    text(&item.method).size(10).color(get_method_color(&method)),
+                    column![
+                        text(&item.name).size(12).color(TEXT),
+                        text(&item.url).size(10).color(MUTED),
+                    ]
+                    .spacing(3)
+                    .width(Length::Fill),
+                ]
+                .spacing(9)
+                .align_y(Alignment::Center);
+                workspace_tree = workspace_tree.push(
+                    button(content)
+                        .on_press(SidebarEvent::SearchSelect(item.id))
+                        .width(Length::Fill)
+                        .padding([8, 6])
+                        .style(|_, status| button::Style {
+                            background: matches!(
+                                status,
+                                button::Status::Hovered | button::Status::Pressed
+                            )
+                            .then_some(BTN_BG.into()),
+                            text_color: TEXT,
+                            border: iced::Border {
+                                radius: 6.0.into(),
+                                ..Default::default()
+                            },
+                            ..Default::default()
+                        }),
+                );
+            }
+            if self.search_pending {
+                workspace_tree =
+                    workspace_tree.push(text("Searching SQLite…").size(11).color(MUTED));
+            } else if self.search_results.is_empty() {
+                workspace_tree =
+                    workspace_tree.push(text("No matching requests").size(11).color(MUTED));
+            }
         }
-
-        for req in &self.root_requests {
-            workspace_tree =
-                workspace_tree.push(Self::render_request_item(req, 0, self.context_menu));
+        let list = iced::widget::scrollable(workspace_tree)
+            .height(Length::Fill)
+            .width(Length::Fill);
+        let mut contents = column![header, search_bar, list];
+        if let Some(status) = &self.status {
+            contents = contents.push(text(status).size(10).color(MUTED));
         }
-
         let sidebar_content = container(
-            column![header, search_bar, Space::new().height(5), workspace_tree,]
+            contents
                 .spacing(14)
-                .padding(16)
+                .padding([18, 10])
                 .width(Length::Fill)
                 .height(Length::Fill),
         )
-        .width(Length::Fixed(232.0))
+        .width(Length::Fill)
         .height(Length::Fill)
-        .padding(15)
         .style(|_| container::Style {
             background: Some(BG.into()),
             border: iced::Border {
@@ -304,22 +627,32 @@ impl SidebarState {
     }
 
     fn render_folder<'a>(
+        &'a self,
         folder: &'a FolderModel,
         depth: usize,
         active_menu: Option<ContextMenuData>,
     ) -> Element<'a, SidebarEvent> {
         let indent = (depth * 12) as f32;
 
+        let name: Element<'_, SidebarEvent> = match folder.id {
+            Some(id) => self.rename_input(ContextTarget::Folder(id), &folder.name),
+            None => text(&folder.name).size(13).color(TEXT).into(),
+        };
+
         let folder_header = row![
             Space::new().width(indent),
             icon("fa-folder").size(13).color(VIOLET),
-            text(&folder.name).size(13).color(TEXT),
-            horizontal(),
-            button(text("+").size(10)).padding([2, 5]),
+            name
         ]
         .spacing(6)
         .align_y(Alignment::Center);
 
+        let folder_header: Element<'_, SidebarEvent> = match folder.id {
+            Some(id) if !self.is_renaming(ContextTarget::Folder(id)) => mouse_area(folder_header)
+                .on_double_click(SidebarEvent::BeginRename(ContextTarget::Folder(id)))
+                .into(),
+            _ => folder_header.into(),
+        };
         let folder_header = Self::with_context_menu(
             folder_header,
             folder.id.map(ContextTarget::Folder),
@@ -329,17 +662,18 @@ impl SidebarState {
         let mut children = column![folder_header].spacing(4);
 
         for subfolder in &folder.subfolders {
-            children = children.push(Self::render_folder(subfolder, depth + 1, active_menu));
+            children = children.push(self.render_folder(subfolder, depth + 1, active_menu));
         }
 
         for req in &folder.requests {
-            children = children.push(Self::render_request_item(req, depth + 1, active_menu));
+            children = children.push(self.render_request_item(req, depth + 1, active_menu));
         }
 
         children.into()
     }
 
     fn render_request_item<'a>(
+        &'a self,
         req: &'a RequestSavedModel,
         depth: usize,
         active_menu: Option<ContextMenuData>,
@@ -348,23 +682,50 @@ impl SidebarState {
         let method = req.method.parse().unwrap_or(HttpMethod::Get);
         let method_color = get_method_color(&method);
 
+        let name: Element<'_, SidebarEvent> = match req.id {
+            Some(id) => self.rename_input(ContextTarget::Request(id), &req.name),
+            None => text(&req.name).size(12).into(),
+        };
+
         let item_content = row![
             Space::new().width(indent),
             text(&req.method).size(9).color(method_color),
-            text(&req.name).size(12).color(TEXT),
+            name
         ]
         .spacing(8)
         .align_y(Alignment::Center);
 
+        let editing = req
+            .id
+            .is_some_and(|id| self.is_renaming(ContextTarget::Request(id)));
+        // One mouse_area owns BOTH callbacks. A nested on_double_click mouse_area
+        // captures the left press before an outer on_press can select the request.
+        let item_content: Element<'_, SidebarEvent> = match req.id {
+            Some(id) if !editing => mouse_area(item_content)
+                .on_press(SidebarEvent::SelectRequest(req.clone()))
+                .on_double_click(SidebarEvent::BeginRename(ContextTarget::Request(id)))
+                .into(),
+            _ => item_content.into(),
+        };
         let request_content = Self::with_context_menu(
             item_content,
             req.id.map(ContextTarget::Request),
             active_menu,
         );
 
-        container(mouse_area(request_content).on_press(SidebarEvent::SelectRequest(req.clone())))
+        let selected = req.id.is_some() && req.id == self.active_request_id;
+        container(request_content)
             .width(Length::Fill)
-            .padding(5.0)
+            .padding([7, 8])
+            .style(move |_| container::Style {
+                background: selected.then_some(BTN_BG.into()),
+                border: iced::Border {
+                    color: if selected { VIOLET } else { BG },
+                    width: if selected { 1.0 } else { 0.0 },
+                    radius: 7.0.into(),
+                },
+                ..Default::default()
+            })
             .into()
     }
 
@@ -372,12 +733,20 @@ impl SidebarState {
         use crate::ui::component::menu::{MenuItem, menu};
 
         let actions: &[(&str, ContextAction)] = match target {
-            ContextTarget::Workspace | ContextTarget::Folder(_) => &[
+            ContextTarget::Workspace => &[
                 ("Create Request", ContextAction::CreateRequest),
                 ("Create Folder", ContextAction::CreateFolder),
             ],
+            ContextTarget::Folder(_) => &[
+                ("Create Request", ContextAction::CreateRequest),
+                ("Create Folder", ContextAction::CreateFolder),
+                ("Rename", ContextAction::Rename),
+                ("Delete", ContextAction::Delete),
+            ],
             ContextTarget::Request(_) => &[
+                ("Rename", ContextAction::Rename),
                 ("Duplicate", ContextAction::Duplicate),
+                ("Generate cURL", ContextAction::GenerateCurl),
                 ("Delete", ContextAction::Delete),
             ],
         };
@@ -414,5 +783,92 @@ impl SidebarState {
             SidebarEvent::CloseContextMenu,
         )
         .into()
+    }
+
+    fn reload_workspace(repo: Option<&Arc<SqliteRepository>>) -> Task<SidebarEvent> {
+        let Some(repo) = repo.cloned() else {
+            tracing::warn!("Repository is not ready");
+            return Task::none();
+        };
+
+        Task::perform(
+            async move { repo.fetch_workspace_tree().await },
+            SidebarEvent::WorkspaceRender,
+        )
+    }
+
+    fn find_folder_name(folders: &[FolderModel], id: i64) -> Option<&str> {
+        for folder in folders {
+            if folder.id == Some(id) {
+                return Some(&folder.name);
+            }
+
+            if let Some(name) = Self::find_folder_name(&folder.subfolders, id) {
+                return Some(name);
+            }
+        }
+
+        None
+    }
+
+    fn find_request_name(folders: &[FolderModel], id: i64) -> Option<&str> {
+        for folder in folders {
+            if let Some(req) = folder.requests.iter().find(|req| req.id == Some(id)) {
+                return Some(&req.name);
+            }
+
+            if let Some(name) = Self::find_request_name(&folder.subfolders, id) {
+                return Some(name);
+            }
+        }
+
+        None
+    }
+
+    fn target_name(&self, target: ContextTarget) -> Option<&str> {
+        match target {
+            ContextTarget::Folder(id) => Self::find_folder_name(&self.folders, id),
+
+            ContextTarget::Request(id) => self
+                .root_requests
+                .iter()
+                .find(|req| req.id == Some(id))
+                .map(|req| req.name.as_str())
+                .or_else(|| Self::find_request_name(&self.folders, id)),
+
+            ContextTarget::Workspace => None,
+        }
+    }
+
+    fn is_renaming(&self, target: ContextTarget) -> bool {
+        self.renaming
+            .as_ref()
+            .is_some_and(|state| state.target == target)
+    }
+
+    fn rename_input<'a>(
+        &'a self,
+        target: ContextTarget,
+        name: &'a str,
+    ) -> Element<'a, SidebarEvent> {
+        if let Some(state) = &self.renaming {
+            if state.target == target {
+                let id = widget::Id::new("sidebar-rename");
+                let input = text_input("Name", &state.draft)
+                    .id(id)
+                    .on_input(SidebarEvent::RenameChanged)
+                    .on_submit(SidebarEvent::CommitRename)
+                    .size(12)
+                    .padding(4);
+                return RenameField::new(
+                    input,
+                    SidebarEvent::CommitRename,
+                    SidebarEvent::CancelRename,
+                )
+                .into();
+            }
+        }
+
+        text(name).size(12).color(TEXT).into()
     }
 }

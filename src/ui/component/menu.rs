@@ -20,10 +20,10 @@ impl<Message> MenuItem<Message> {
         }
     }
 
-    pub fn destructive(mut self) -> Self {
-        self.destructive = true;
-        self
-    }
+    // pub fn destructive(mut self) -> Self {
+    //     self.destructive = true;
+    //     self
+    // }
 }
 
 pub fn menu<'a, Message: Clone + 'a>(items: Vec<MenuItem<Message>>) -> Element<'a, Message> {

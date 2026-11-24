@@ -7,6 +7,7 @@ mod enums;
 mod infra;
 mod logger;
 mod ui;
+mod utils;
 
 fn main() -> iced::Result {
     let _guard = logger::init_logger();

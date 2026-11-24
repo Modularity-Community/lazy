@@ -1,7 +1,7 @@
 use iced::{
     Element, Event, Length, Point, Rectangle, Size, Vector,
     advanced::{
-        Clipboard, Layout, Shell, Widget, layout, mouse::Cursor, overlay, renderer, widget::Tree,
+        Clipboard, Layout, Shell, Widget, layout, mouse::Cursor, overlay, renderer, widget::{Operation, Tree},
     },
     mouse,
 };
@@ -59,6 +59,17 @@ impl<Message: Clone> Widget<Message, iced::Theme, iced::Renderer> for ContextMen
             .layout(&mut tree.children[0], renderer, limits);
 
         layout::Node::with_children(child.size(), vec![child])
+    }
+
+    fn operate(
+        &mut self, tree: &mut Tree, layout: Layout<'_>, renderer: &iced::Renderer,
+        operation: &mut dyn Operation,
+    ) {
+        operation.traverse(&mut |operation| {
+            self.content.as_widget_mut().operate(
+                &mut tree.children[0], layout.child(0), renderer, operation,
+            );
+        });
     }
 
     fn draw(
