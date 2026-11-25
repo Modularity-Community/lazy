@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{collections::HashSet, sync::Arc};
 
 use iced::{
     Alignment, Background, Element, Length, Point, Task,
@@ -63,11 +63,13 @@ pub struct SidebarState {
     pub search_pending: bool,
     pub status: Option<String>,
     pub rename_saving: bool,
+    pub expanded_folders: HashSet<i64>,
 }
 
 #[derive(Debug, Clone)]
 pub enum SidebarEvent {
     SelectRequest(RequestSavedModel),
+    ExpandedFolder(i64),
 
     // Commands
     CreateFolder(Option<i64>),
@@ -127,6 +129,7 @@ impl SidebarState {
             search_pending: false,
             status: None,
             rename_saving: false,
+            expanded_folders: HashSet::new(),
         }
     }
     fn new_request(folder_id: Option<i64>) -> RequestSavedModel {
@@ -499,6 +502,13 @@ impl SidebarState {
             },
             // AppState opens the app-level cURL preview / error toast.
             SidebarEvent::GenerateCurlReady(_) => Task::none(),
+            SidebarEvent::ExpandedFolder(id) => {
+                if !self.expanded_folders.insert(id) {
+                    self.expanded_folders.remove(&id);
+                }
+
+                Task::none()
+            }
         }
     }
 
@@ -639,9 +649,19 @@ impl SidebarState {
             None => text(&folder.name).size(13).color(TEXT).into(),
         };
 
+        let is_open = folder
+            .id
+            .map_or(false, |id| self.expanded_folders.contains(&id));
+
+        let folder_icon = if is_open {
+            "fa-folder_open"
+        } else {
+            "fa-folder"
+        };
+
         let folder_header = row![
             Space::new().width(indent),
-            icon("fa-folder").size(13).color(VIOLET),
+            icon(&folder_icon).size(13).color(VIOLET),
             name
         ]
         .spacing(6)
@@ -650,6 +670,7 @@ impl SidebarState {
         let folder_header: Element<'_, SidebarEvent> = match folder.id {
             Some(id) if !self.is_renaming(ContextTarget::Folder(id)) => mouse_area(folder_header)
                 .on_double_click(SidebarEvent::BeginRename(ContextTarget::Folder(id)))
+                .on_press(SidebarEvent::ExpandedFolder(id))
                 .into(),
             _ => folder_header.into(),
         };
@@ -661,12 +682,14 @@ impl SidebarState {
 
         let mut children = column![folder_header].spacing(4);
 
-        for subfolder in &folder.subfolders {
-            children = children.push(self.render_folder(subfolder, depth + 1, active_menu));
-        }
+        if is_open {
+            for subfolder in &folder.subfolders {
+                children = children.push(self.render_folder(subfolder, depth + 1, active_menu));
+            }
 
-        for req in &folder.requests {
-            children = children.push(self.render_request_item(req, depth + 1, active_menu));
+            for req in &folder.requests {
+                children = children.push(self.render_request_item(req, depth + 1, active_menu));
+            }
         }
 
         children.into()

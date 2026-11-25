@@ -15,13 +15,13 @@ pub struct HeaderBarState {
     pub method: HttpMethod,
     pub is_sending: bool,
     pub is_saving: bool,
+    pub request_dir: String,
 }
 
 #[derive(Debug, Clone)]
 pub enum HeaderBarEvent {
     UrlEdited(String),
     SendReqeust,
-    FinishedRequest,
     MethodSelected(HttpMethod),
 }
 
@@ -32,13 +32,13 @@ impl HeaderBarState {
             method: HttpMethod::Get,
             is_sending: false,
             is_saving: false,
+            request_dir: String::new(),
         }
     }
 
     pub fn update(&mut self, message: HeaderBarEvent) -> Task<HeaderBarEvent> {
         match message {
             HeaderBarEvent::UrlEdited(url) => self.url = url,
-            HeaderBarEvent::FinishedRequest => self.is_sending = false,
             HeaderBarEvent::SendReqeust => self.is_sending = true,
             HeaderBarEvent::MethodSelected(method) => self.method = method,
         }
@@ -47,10 +47,11 @@ impl HeaderBarState {
 
     pub fn view<'a>(&'a self, screen_size: &Option<Size<f32>>) -> Element<'a, HeaderBarEvent> {
         let window_width = screen_size.map(|s| s.width).unwrap_or(800.0);
+        let request_name = &self.request_dir;
         let breadcrumb = row![
             text("WORKSPACE").size(10).color(MUTED),
-            text("/ ").size(11).color(MUTED),
-            text("TEST API").size(12).color(VIOLET), //TODO: Based on request name
+            text("/").size(11).color(MUTED),
+            text(request_name).size(12).color(VIOLET), //TODO: Based on request name
             horizontal(),
             text("REST CLIENT").size(10).color(MUTED),
         ]
@@ -90,7 +91,9 @@ impl HeaderBarState {
             "Send"
         };
         let send_btn = button(text(send_label).size(13).color(BG))
-            .on_press_maybe((!self.is_sending && !self.is_saving).then_some(HeaderBarEvent::SendReqeust))
+            .on_press_maybe(
+                (!self.is_sending && !self.is_saving).then_some(HeaderBarEvent::SendReqeust),
+            )
             .padding([11, 18])
             .btn_execute_style();
 

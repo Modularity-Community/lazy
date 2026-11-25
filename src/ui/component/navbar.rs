@@ -14,6 +14,8 @@ pub struct NavbarEvent {
 #[derive(Debug, Clone)]
 pub enum NavbarMessage {
     ToggleWorkspace,
+    OpenEnvironments,
+    OpenImportCurl,
 }
 
 impl NavbarEvent {
@@ -25,9 +27,13 @@ impl NavbarEvent {
 
     pub fn update(&mut self, message: NavbarMessage) -> Task<NavbarMessage> {
         match message {
-            NavbarMessage::ToggleWorkspace => self.show_workspace = !self.show_workspace,
+            NavbarMessage::ToggleWorkspace => {
+                self.show_workspace = !self.show_workspace;
+                Task::none()
+            }
+            NavbarMessage::OpenEnvironments => Task::none(),
+            NavbarMessage::OpenImportCurl => Task::none(),
         }
-        Task::none()
     }
 
     pub fn view<'a>(&'a self, screen_size: &Option<Size<f32>>) -> Element<'a, NavbarMessage> {
@@ -41,28 +47,23 @@ impl NavbarEvent {
         let window_width = screen_size.map(|s| s.width).unwrap_or(800.0);
 
         let nav_items: Element<'a, NavbarMessage> = {
-            let collections = button(text("Collections").size(12))
-                .btn_style()
-                .padding([8, 10]);
-            let history = button(text("History").size(12))
-                .btn_style()
-                .padding([8, 10]);
             let environments = button(text("Environments").size(12))
                 .btn_style()
                 .padding([8, 10]);
-            let settings = button(text("Settings").size(12))
+
+            let import_curl = button(text("Import cURL").size(12))
                 .btn_style()
                 .padding([8, 10]);
 
             if window_width < 560.0 {
-                row![settings].align_y(Alignment::End).into()
+                row![environments].align_y(Alignment::End).into()
             } else if window_width < 780.0 {
-                row![collections, history, settings]
+                row![environments, import_curl]
                     .spacing(4)
                     .align_y(Alignment::End)
                     .into()
             } else {
-                row![collections, history, environments, settings]
+                row![environments, import_curl]
                     .spacing(4)
                     .align_y(Alignment::End)
                     .into()
