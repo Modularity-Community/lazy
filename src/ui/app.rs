@@ -19,6 +19,7 @@ use crate::ui::component::request::{RequestPanelEvent, RequestPanelState};
 use crate::ui::component::response::{ResponsePanelEvent, ResponsePanelState};
 use crate::ui::component::sidebar::{SidebarEvent, SidebarState};
 use crate::ui::icon::icon;
+use crate::ui::style::button::LazyButton;
 use crate::ui::theme::colors;
 
 pub struct AppState {
@@ -232,9 +233,10 @@ impl AppState {
             ]
             .spacing(6),
             horizontal(),
-            button(text("×").size(22).color(colors::TEXT))
+            button(icon("fa-close").size(22).color(colors::TEXT))
                 .on_press(AppMessage::CloseCurlPreview)
                 .style(|_, _| button::Style::default())
+                .btn_style()
         ]
         .align_y(Alignment::Center);
         let code = container(
@@ -263,10 +265,12 @@ impl AppState {
             horizontal(),
             button(text("Close"))
                 .on_press(AppMessage::CloseCurlPreview)
-                .padding([9, 16]),
+                .padding([9, 16])
+                .btn_style(),
             button(text("Copy cURL"))
                 .on_press(AppMessage::CopyCurlPreview)
-                .padding([9, 16]),
+                .padding([9, 16])
+                .btn_style(),
         ]
         .spacing(10)
         .align_y(Alignment::Center);
@@ -391,6 +395,7 @@ impl AppState {
                 self.sidebar.selection_revision = self.sidebar.selection_revision.wrapping_add(1);
                 self.sidebar.context_menu = None;
                 self.header_bar.url = req.url;
+                self.header_bar.request_dir = req.name; //TODO: should append folder_name + request_name;
                 self.header_bar.method = req.method.parse().unwrap_or(HttpMethod::Get);
                 self.sidebar.active_request_id = req.id;
                 self.sidebar.current_folder_id = req.folder_id;
